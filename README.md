@@ -87,6 +87,7 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
   }
   ```
 - **Server-managed fields:** Any incoming `streamer.id`, `createdAt`, or `updatedAt` values are ignored; IDs and timestamps are injected when the record is stored.
+- **Validation:** `streamer.firstName`, `streamer.lastName`, and `streamer.email` must be non-empty. When the YouTube block is present, `platforms.youtube.handle` is also required.
 - **Validation:** `streamer.alias` must be non-empty. When the YouTube block is present, `platforms.youtube.handle` is also required.
 - **Response:** `201 Created` with the stored record echoed back as JSON, or `500 Internal Server Error` if the file append fails.
 
