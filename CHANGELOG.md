@@ -7,9 +7,10 @@
 - Added the `/api/v1/youtube/channel` lookup endpoint to convert @handles into canonical UC channel IDs.
 - Added POST `/api/v1/streamers` to persist streamer metadata into `data/streamers.json` for multi-platform support.
 - Added GET `/api/v1/streamers` so clients can list every stored streamer record.
+- Added the `web/algui` WebAssembly UI sources so the server can ship a minimal dashboard out of the box.
+- Added `web/README.md` so contributors know how to build and serve the alGUI assets.
 - Added a JSON schema (`schema/streamers.schema.json`) and typed storage layer for streamers so data persists with server-managed IDs and timestamps.
 - Stubbed platform folders (`internal/platforms/{youtube,facebook,twitch}`) plus shared logging utilities to support future providers.
-- Added the `web/algui` WebAssembly UI sources so the server can ship a minimal dashboard out of the box.
 - Added a root `.gitignore` to drop editor/OS cruft, `cmd/alertserver/out.bin`, and other generated artifacts (including `web/algui/main.wasm`).
 - Added a root `README.md` with setup instructions and a canonical list of every HTTP endpoint so future additions stay documented.
 ### Changed
