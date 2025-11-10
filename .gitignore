@@ -1,0 +1,23 @@
+# OS / editor cruft
+.DS_Store
+.vscode/
+.idea/
+
+# Go build outputs
+*.exe
+*.dll
+*.so
+*.test
+*.out
+*.log
+
+# Project binaries
+cmd/alertserver/out.bin
+
+# WebAssembly build artifacts
+web/algui/main.wasm
+
+# Dependency / build directories
+bin/
+dist/
+cover/
