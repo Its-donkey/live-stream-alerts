@@ -26,7 +26,6 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
 | ------ | ---------------------------- | ----------- |
 | GET    | `/alerts`                    | Responds to YouTube PubSubHubbub verification challenges. |
 | POST   | `/api/v1/youtube/subscribe`  | Proxies subscription requests to YouTube's hub after enforcing defaults. |
-| POST   | `/api/v1/youtube/new/subscribe` | Same handler as `/api/v1/youtube/subscribe`, available for clients migrating to the new path. |
 | POST   | `/api/v1/youtube/channel`    | Resolves a YouTube `@handle` into its canonical channel ID. |
 | POST   | `/api/v1/streamers`          | Persists streamer metadata to `data/streamers.json`. |
 | GET    | `/api/v1/server/config`      | Returns the server runtime information consumed by the UI. |
@@ -36,7 +35,7 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
 - **Query parameters:** `hub.mode`, `hub.topic`, `hub.lease_seconds`, `hub.verify_token`, and **required** `hub.challenge`.
 - **Response:** `200 OK` with the challenge echoed as plain text when successful; `400 Bad Request` if the challenge is missing.
 
-### POST `/api/v1/youtube/subscribe` (and `/api/v1/youtube/new/subscribe`)
+### POST `/api/v1/youtube/subscribe`
 - **Purpose:** Submits an application/x-www-form-urlencoded request to YouTube's hub (`https://pubsubhubbub.appspot.com/subscribe`).
 - **Request body:** JSON matching `internal/platforms/youtube/client.YouTubeRequest`:
   - `topic` (required): full feed URL to subscribe to.
