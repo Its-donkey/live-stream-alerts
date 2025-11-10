@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"live-stream-alerts/internal/youtube"
+	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
 )
 
 const (
@@ -94,10 +94,10 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.Logger.Printf("dump request from %s: %v", r.RemoteAddr, err)
 	} else {
-		s.Logger.Printf("---- Incoming request from %s ----\n%s\n", r.RemoteAddr, dump)
+		s.Logger.Printf("\n---- Incoming request from %s ----\n%s\n", r.RemoteAddr, dump)
 	}
 
-	if youtube.HandleAlertsVerification(w, r, s.Logger) {
+	if youtubehandlers.SubscriptionConfirmation(w, r, s.Logger) {
 		return
 	}
 
