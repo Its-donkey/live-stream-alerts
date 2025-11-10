@@ -8,6 +8,7 @@
 - Added POST `/api/v1/streamers` to persist streamer metadata into `data/streamers.json` for multi-platform support.
 - Added GET `/api/v1/streamers` so clients can list every stored streamer record.
 - Added the `web/algui` WebAssembly UI sources so the server can ship a minimal dashboard out of the box.
+- Rebuilt the `web/algui` UI in Go WASM so the landing page now mirrors the original React roster (including styling, status badges, and a static fallback dataset).
 - Added `web/README.md` so contributors know how to build and serve the alGUI assets.
 - Added a JSON schema (`schema/streamers.schema.json`) and typed storage layer for streamers so data persists with server-managed IDs and timestamps.
 - Stubbed platform folders (`internal/platforms/{youtube,facebook,twitch}`) plus shared logging utilities to support future providers.
