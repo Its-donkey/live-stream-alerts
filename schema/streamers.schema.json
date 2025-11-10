@@ -1,0 +1,115 @@
+{
+	"$schema": "https://json-schema.org/draft-07/schema",
+	"type": "object",
+	"properties": {
+		"streamer": {
+		"type": "object",
+		"description": "Streamers personal information",
+		"properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique ID automatically generated internally",
+          "readOnly": true
+        },
+			"alias": {
+			"type": "string",
+			"description": "Streaming alias or nickname"
+			},
+			"firstName": {
+			"type": "string",
+			"description": "First name of streamer"
+			},
+			"lastName": {
+			"type": "string",
+			"description": "Last name of streamer"
+			},
+			"email": {
+			"type": "string",
+			"format": "email",
+			"description": "Streamer's email address"
+			},
+			"city": {
+			"type": "string",
+			"description": "Location of streamer"
+			},
+			"country": {
+			"type": "string",
+			"description": "Country the streamer is in"
+			}
+		},
+		"required": [
+			"id",
+			"alias"
+		]
+		},
+		"platforms": {
+		"type": "object",
+		"properties": {
+			"youtube": {
+			"type": "object",
+			"properties": {
+				"handle": {
+				"type": "string",
+				"description": "YouTube channel handle"
+				},
+				"channelId": {
+				"type": "string",
+				"description": "Canonical UC channel ID"
+				},
+				"hubSecret": {
+				"type": "string",
+				"description": "Webhook secret used to verify YouTube notifications"
+				},
+				"hubLeaseRenewalDue": {
+				"type": "string",
+				"format": "date-time",
+				"description": "Date and time that the YouTube alert subscription is due for renewal"
+				}
+			},
+			"required": [
+				"handle"
+			]
+			},
+			"facebook": {
+			"type": "object",
+			"properties": {
+				"pageId": {
+				"type": "string",
+				"description": "Facebook page identifier"
+				},
+				"accessToken": {
+				"type": "string",
+				"description": "Token used to call the Facebook Graph API"
+				}
+			}
+			},
+			"twitch": {
+			"type": "object",
+			"properties": {
+				"username": {
+				"type": "string",
+				"description": "Twitch broadcaster username"
+				},
+				"broadcasterId": {
+				"type": "string",
+				"description": "Twitch broadcaster ID"
+				}
+			}
+			}
+		}
+		},
+		"createdAt": {
+		"type": "string",
+		"format": "date-time",
+		"description": "ISO-8601 timestamp when this record was created",
+		"readOnly": true
+		},
+		"updatedAt": {
+		"type": "string",
+		"format": "date-time",
+		"description": "ISO-8601 timestamp when this record was last updated",
+		"readOnly": true
+		}
+	}
+}

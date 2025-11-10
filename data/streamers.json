@@ -1,0 +1,25 @@
+{
+  "$schema": "../schema/streamers.schema.json",
+  "streamers": [
+    {
+      "streamer": {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "firstName": "Linus",
+        "lastName": "Sebastian",
+        "email": "linus@example.com",
+        "city": "Vancouver",
+        "country": "Canada"
+      },
+      "platforms": {
+        "youtube": {
+          "handle": "@LinusTechTips",
+          "channelId": "UCXuqSBlHAE6Xw-yeJA0Tunw",
+          "hubSecret": "redacted",
+          "hubLeaseRenewalDue": "2025-11-17T10:36:29Z"
+        }
+      },
+      "createdAt": "2025-11-10T10:36:29Z",
+      "updatedAt": "2025-11-10T10:36:29Z"
+    }
+  ]
+}

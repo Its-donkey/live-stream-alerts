@@ -1,9 +1,7 @@
-// file name — /internal/youtube/subscribe.go
-package youtube
+package client
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,15 +12,16 @@ import (
 )
 
 const (
-	defaultHubURL      = "https://pubsubhubbub.appspot.com/subscribe"
-	defaultCallbackURL = "https://sharpen.live/alert"
-	defaultLease       = 864000
+	DefaultHubURL      = "https://pubsubhubbub.appspot.com/subscribe"
+	DefaultCallbackURL = "https://sharpen.live/alert"
+	DefaultLease       = 864000
+	DefaultMode        = "subscribe"
 )
 
 // YouTubeRequest models the fields required by YouTube's WebSub subscription flow.
 type YouTubeRequest struct {
 	Topic        string
-	Calback      string
+	Callback     string
 	Mode         string
 	Verify       string
 	VerifyToken  string
@@ -30,79 +29,17 @@ type YouTubeRequest struct {
 	LeaseSeconds int
 }
 
-// SubscribeOptions configures the HTTP handler that proxies subscribe requests to the hub.
-type SubscribeOptions struct {
-	HubURL string
-	Client *http.Client
-	Logger Logger
-}
-
-// NewSubscribeHandler returns an http.Handler that accepts POST requests and forwards them to YouTube's hub.
-func NewSubscribeHandler(opts SubscribeOptions) http.Handler {
-	hubURL := strings.TrimSpace(opts.HubURL)
-	if hubURL == "" {
-		hubURL = defaultHubURL
-	}
-
-	client := opts.Client
-	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Second}
-	}
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.Header().Set("Allow", http.MethodPost)
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		defer r.Body.Close()
-		var subscribeReq YouTubeRequest
-		if err := json.NewDecoder(r.Body).Decode(&subscribeReq); err != nil {
-			http.Error(w, "invalid JSON body", http.StatusBadRequest)
-			return
-		}
-
-		subscribeReq.Calback = defaultCallbackURL
-		subscribeReq.Mode = "subscribe"
-		if subscribeReq.LeaseSeconds <= 0 {
-			subscribeReq.LeaseSeconds = defaultLease
-		}
-
-		requestHubURL := hubURL
-		if override := strings.TrimSpace(r.URL.Query().Get("hub_url")); override != "" {
-			requestHubURL = override
-		}
-
-		resp, body, err := SubscribeYouTube(r.Context(), client, requestHubURL, subscribeReq)
-		if err != nil && opts.Logger != nil {
-			opts.Logger.Printf("subscribe request hub response: %v", err)
-		}
-		if resp == nil {
-			http.Error(w, "hub request failed", http.StatusBadGateway)
-			return
-		}
-
-		if ct := resp.Header.Get("Content-Type"); ct != "" {
-			w.Header().Set("Content-Type", ct)
-		} else {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		}
-		w.WriteHeader(resp.StatusCode)
-		if len(body) > 0 {
-			_, _ = w.Write(body)
-			return
-		}
-		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			_, _ = io.WriteString(w, resp.Status)
-		}
-	})
+// NormaliseSubscribeRequest applies the enforced defaults required by the system.
+func NormaliseSubscribeRequest(req *YouTubeRequest) {
+	req.Callback = DefaultCallbackURL
+	req.Mode = DefaultMode
+	req.LeaseSeconds = DefaultLease
 }
 
 // YouTubeRequest is your provided shape; using as-is.
 // Fields expected:
 //
-//	Topic, Calback (sic), Mode, Verify, VerifyToken, Secret, LeaseSeconds
+//	Topic, Callback (sic), Mode, Verify, VerifyToken, Secret, LeaseSeconds
 //
 // For WebSub subscribe, Mode should be "subscribe"; Verify is "sync" or "async".
 func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req YouTubeRequest) (*http.Response, []byte, error) {
@@ -115,8 +52,8 @@ func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req Y
 	if strings.TrimSpace(req.Topic) == "" {
 		return nil, nil, errors.New("topic is required")
 	}
-	if strings.TrimSpace(req.Calback) == "" { // using field name exactly as provided
-		return nil, nil, errors.New("calback (callback URL) is required")
+	if strings.TrimSpace(req.Callback) == "" { // using field name exactly as provided
+		return nil, nil, errors.New("callback url is required")
 	}
 	mode := strings.TrimSpace(req.Mode)
 	if mode == "" {
@@ -137,7 +74,7 @@ func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req Y
 	form := url.Values{}
 	form.Set("hub.mode", mode)
 	form.Set("hub.topic", req.Topic)
-	form.Set("hub.callback", req.Calback)
+	form.Set("hub.callback", req.Callback)
 	form.Set("hub.verify", verify)
 
 	if req.VerifyToken != "" {
@@ -150,10 +87,12 @@ func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req Y
 
 	// Only include secret if callback is HTTPS (best practice)
 	if req.Secret != "" {
-		if u, err := url.Parse(req.Calback); err == nil && strings.EqualFold(u.Scheme, "https") {
+		if u, err := url.Parse(req.Callback); err == nil && strings.EqualFold(u.Scheme, "https") {
 			form.Set("hub.secret", req.Secret)
 		}
 	}
+
+	fmt.Println(form.Encode())
 
 	// Build POST request
 	hubURL = strings.TrimSpace(hubURL)

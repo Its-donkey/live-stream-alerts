@@ -1,18 +1,16 @@
-package youtube
+package handlers
 
 import (
 	"io"
 	"net/http"
+	"strconv"
 )
 
-// Logger captures the subset of log.Logger we need so callers can pass custom loggers.
-type Logger interface {
-	Printf(format string, v ...any)
-}
+import "live-stream-alerts/internal/logging"
 
 // HandleVerification handles YouTube PubSubHubbub GET verification requests.
 // It returns true when the request has been handled (regardless of success).
-func HandleAlertsVerification(w http.ResponseWriter, r *http.Request, logger Logger) bool {
+func SubscriptionConfirmation(w http.ResponseWriter, r *http.Request, logger logging.Logger) bool {
 	if r.Method != http.MethodGet || r.URL.Path != "/alerts" {
 		return false
 	}
@@ -36,7 +34,9 @@ func HandleAlertsVerification(w http.ResponseWriter, r *http.Request, logger Log
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Length", strconv.Itoa(len(challenge)))
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, challenge)
+
 	return true
 }
