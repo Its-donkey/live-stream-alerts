@@ -31,6 +31,7 @@ type Record struct {
 // Streamer captures personal information for a streamer.
 type Streamer struct {
 	ID        string `json:"id"`
+	Alias     string `json:"alias"`
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
 	Email     string `json:"email"`

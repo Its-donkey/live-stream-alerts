@@ -68,11 +68,12 @@ func NewCreateHandler(opts CreateOptions) http.Handler {
 }
 
 func validateRecord(record *streamers.Record) error {
+	record.Streamer.Alias = strings.TrimSpace(record.Streamer.Alias)
 	record.Streamer.FirstName = strings.TrimSpace(record.Streamer.FirstName)
 	record.Streamer.LastName = strings.TrimSpace(record.Streamer.LastName)
 	record.Streamer.Email = strings.TrimSpace(record.Streamer.Email)
-	if record.Streamer.FirstName == "" || record.Streamer.LastName == "" || record.Streamer.Email == "" {
-		return fmt.Errorf("streamer.firstName, streamer.lastName, and streamer.email are required")
+	if record.Streamer.Alias == "" {
+		return fmt.Errorf("streamer.alias is required")
 	}
 	if record.Platforms.YouTube != nil {
 		record.Platforms.YouTube.Handle = strings.TrimSpace(record.Platforms.YouTube.Handle)
