@@ -13,4 +13,4 @@ The `web/` directory houses client-facing assets served directly by the alert se
    ```
 3. Ensure `wasm_exec.js` ships beside `main.wasm`. The Go toolchain provides this file (`$(go env GOROOT)/misc/wasm/wasm_exec.js`).
 
-The alert server automatically serves every asset under `web/algui`, including `styles.css` and the static `streamers.json` fallback used when an API is unavailable. Generated artifacts such as `main.wasm` are ignored via `.gitignore`.
+The alert server automatically serves every asset under `web/algui`, including `styles.css`, the static `streamers.json` fallback used when an API is unavailable, and the interactive streamer submission form. Generated artifacts such as `main.wasm` are ignored via `.gitignore`.
