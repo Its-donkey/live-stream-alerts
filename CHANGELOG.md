@@ -6,6 +6,7 @@
 - Added the `/api/v1/youtube/subscribe` proxy that forwards JSON payloads to the YouTube PubSubHubbub hub while applying the required defaults.
 - Added the `/api/v1/youtube/channel` lookup endpoint to convert @handles into canonical UC channel IDs.
 - Added POST `/api/v1/streamers` to persist streamer metadata into `data/streamers.json` for multi-platform support.
+- Added GET `/api/v1/streamers` so clients can list every stored streamer record.
 - Added a JSON schema (`schema/streamers.schema.json`) and typed storage layer for streamers so data persists with server-managed IDs and timestamps.
 - Stubbed platform folders (`internal/platforms/{youtube,facebook,twitch}`) plus shared logging utilities to support future providers.
 - Added a root `README.md` with setup instructions and a canonical list of every HTTP endpoint so future additions stay documented.

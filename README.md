@@ -27,6 +27,7 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
 | GET    | `/alerts`                    | Responds to YouTube PubSubHubbub verification challenges. |
 | POST   | `/api/v1/youtube/subscribe`  | Proxies subscription requests to YouTube's hub after enforcing defaults. |
 | POST   | `/api/v1/youtube/channel`    | Resolves a YouTube `@handle` into its canonical channel ID. |
+| GET    | `/api/v1/streamers`          | Returns every stored streamer record. |
 | POST   | `/api/v1/streamers`          | Persists streamer metadata to `data/streamers.json`. |
 | GET    | `/api/v1/server/config`      | Returns the server runtime information consumed by the UI. |
 
@@ -60,6 +61,11 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
   - `400 Bad Request` if `handle` is missing.
   - `502 Bad Gateway` if channel resolution fails.
 
+### GET `/api/v1/streamers`
+- **Purpose:** Lists every persisted streamer record so the UI or tooling can inspect the latest state.
+- **Response:** `200 OK` with `{ "streamers": [ ...records... ] }`.
+- **Notes:** Records mirror the schema in `schema/streamers.schema.json`, including platform metadata and server-managed timestamps.
+
 ### POST `/api/v1/streamers`
 - **Purpose:** Appends a streamer record to `data/streamers.json` using the schema in `schema/streamers.schema.json`.
 - **Request body:** JSON that includes a `streamer` object (alias, first/last name, email, optional location) plus per-platform configuration:
@@ -82,6 +88,7 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
   ```
 - **Server-managed fields:** Any incoming `streamer.id`, `createdAt`, or `updatedAt` values are ignored; IDs and timestamps are injected when the record is stored.
 - **Validation:** `streamer.firstName`, `streamer.lastName`, and `streamer.email` must be non-empty. When the YouTube block is present, `platforms.youtube.handle` is also required.
+- **Validation:** `streamer.alias` must be non-empty. When the YouTube block is present, `platforms.youtube.handle` is also required.
 - **Response:** `201 Created` with the stored record echoed back as JSON, or `500 Internal Server Error` if the file append fails.
 
 ### GET `/api/v1/server/config`
