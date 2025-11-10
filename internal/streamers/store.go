@@ -31,6 +31,7 @@ type Record struct {
 // Streamer captures personal information for a streamer.
 type Streamer struct {
 	ID        string `json:"id"`
+	Alias     string `json:"alias"`
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
 	Email     string `json:"email"`
@@ -107,6 +108,25 @@ func Append(path string, record Record) (Record, error) {
 	}
 
 	return record, nil
+}
+
+// List loads all streamer records from disk.
+func List(path string) ([]Record, error) {
+	if path == "" {
+		return nil, errors.New("streamers file path is required")
+	}
+
+	fileMu.Lock()
+	defer fileMu.Unlock()
+
+	fileData, err := readFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	records := make([]Record, len(fileData.Records))
+	copy(records, fileData.Records)
+	return records, nil
 }
 
 func readFile(path string) (File, error) {
