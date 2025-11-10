@@ -26,11 +26,12 @@ func HandleAlertsVerification(w http.ResponseWriter, r *http.Request, logger Log
 
 	if logger != nil {
 		logger.Printf(
-			"Responding to hub challenge: mode=%s topic=%s lease=%s token=%s",
+			"Responding to hub challenge: mode=%s topic=%s lease=%s token=%s body=%q",
 			query.Get("hub.mode"),
 			query.Get("hub.topic"),
 			query.Get("hub.lease_seconds"),
 			query.Get("hub.verify_token"),
+			challenge,
 		)
 	}
 

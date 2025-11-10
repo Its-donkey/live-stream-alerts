@@ -7,3 +7,4 @@
 ### Changed
 - The subscribe handler now mirrors the hub's HTTP response (body/status) to the API client and falls back to the upstream status text when the hub omits a body.
 - Normalized all YouTube WebSub defaults (callback URL, lease duration, verification mode) inside the handler so clients can omit them safely.
+- Alert verification logging now includes the exact challenge response body so the terminal reflects what was sent back to YouTube.
