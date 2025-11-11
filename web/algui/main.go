@@ -674,9 +674,6 @@ func renderSubmitForm() {
 		}
 		builder.WriteString(`</label></div>`) // end languages label and grid
 
-
-
-
 		// Actions
 		builder.WriteString(`<div class="submit-streamer-actions">`)
 		submitLabel := "Submit streamer"
@@ -836,18 +833,29 @@ func bindSubmitFormEvents() {
 					}
 					currentValue := value
 					go func(target string) {
-						if strings.TrimSpace(submitState.Description) != "" {
-							return
-						}
 						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 						defer cancel()
-						if extracted, err := requestChannelDescription(ctx, target); err == nil {
-							extracted = strings.TrimSpace(extracted)
-							if extracted != "" && strings.TrimSpace(submitState.Description) == "" {
-								submitState.Description = extracted
+						desc, title, err := requestChannelDescription(ctx, target)
+						if err != nil {
+							return
+						}
+						updated := false
+						if strings.TrimSpace(submitState.Description) == "" {
+							if trimmed := strings.TrimSpace(desc); trimmed != "" {
+								submitState.Description = trimmed
 								submitState.Errors.Description = false
-								scheduleRender()
+								updated = true
 							}
+						}
+						if strings.TrimSpace(submitState.Name) == "" {
+							if trimmed := strings.TrimSpace(title); trimmed != "" {
+								submitState.Name = trimmed
+								submitState.Errors.Name = false
+								updated = true
+							}
+						}
+						if updated {
+							scheduleRender()
 						}
 					}(currentValue)
 					break
@@ -1096,42 +1104,42 @@ func submitStreamerRequest(ctx context.Context, payload createStreamerRequest) (
 	}
 }
 
-func requestChannelDescription(ctx context.Context, target string) (string, error) {
+func requestChannelDescription(ctx context.Context, target string) (string, string, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
-		return "", errors.New("empty url")
+		return "", "", errors.New("empty url")
 	}
 	reqPayload, err := json.Marshal(metadataRequest{URL: target})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/metadata/description", bytes.NewReader(reqPayload))
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf(strings.TrimSpace(string(body)))
+		return "", "", fmt.Errorf(strings.TrimSpace(string(body)))
 	}
 
 	var meta metadataResponse
 	if err := json.Unmarshal(body, &meta); err != nil {
-		return "", err
+		return "", "", err
 	}
-	return meta.Description, nil
+	return meta.Description, meta.Title, nil
 }
 
 func buildStreamerDescription(description string, platforms []platformFormRow) string {
