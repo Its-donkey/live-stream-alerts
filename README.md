@@ -107,7 +107,7 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
   ```
 
 ### POST `/api/v1/metadata/description`
-- **Purpose:** Returns the `<meta name="description">` (or OpenGraph description) for a supplied public URL so the UI can pre-fill streamer descriptions.
+- **Purpose:** Returns the `<meta name="description">` (or OpenGraph description) for a supplied public URL so the UI can pre-fill streamer descriptions, display names, and YouTube identifiers.
 - **Request body:**
   ```json
   {
@@ -118,10 +118,12 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
   ```json
   {
     "description": "Channel summary pulled from the destination site.",
-    "title": "Example Channel"
+    "title": "Example Channel",
+    "handle": "@example",
+    "channelId": "UCabc123"
   }
   ```
-- **Notes:** Only `http`/`https` URLs are allowed. A `502` is returned if scraping fails.
+- **Notes:** Only `http`/`https` URLs are allowed. A `502` is returned if scraping fails or the metadata cannot be extracted.
 
 ### Static asset hosting
 - Requests to `/` fall back to the WebAssembly UI served from `web/algui`. When the assets are missing, the server responds with `200 OK` and the message `"alGUI assets not configured"`.
