@@ -29,6 +29,7 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
 | POST   | `/api/v1/youtube/channel`    | Resolves a YouTube `@handle` into its canonical channel ID. |
 | GET    | `/api/v1/streamers`          | Returns every stored streamer record. |
 | POST   | `/api/v1/streamers`          | Persists streamer metadata to `data/streamers.json`. |
+| POST   | `/api/v1/metadata/description` | Scrapes a public URL and returns its meta description/title. |
 | GET    | `/api/v1/server/config`      | Returns the server runtime information consumed by the UI. |
 
 ### GET `/alerts`
@@ -88,7 +89,7 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
     }
   }
   ```
-- **Server-managed fields:** `streamer.id` is derived from the alias by removing whitespace, punctuation, and other non-alphanumeric characters. Incoming IDs, `createdAt`, and `updatedAt` values are ignored; timestamps are injected when the record is stored.
+- **Server-managed fields:** `streamer.id` is derived from the alias by removing whitespace, punctuation, and other non-alphanumeric characters. Incoming IDs, `createdAt`, and `updatedAt` values are ignored; timestamps are injected when the record is stored. The UI automatically calls `/api/v1/metadata/description` to pre-fill `streamer.description` when a channel URL is entered.
 - **Languages:** When provided, entries must come from the supported language list (see `schema/streamers.schema.json`); duplicates and blank values are rejected.
 - **Validation:** `streamer.alias` must be non-empty and unique once cleaned (submitting a duplicate alias returns `409 Conflict`). When the YouTube block is present, `platforms.youtube.handle` is also required.
 - **Response:** `201 Created` with the stored record echoed back as JSON, or `500 Internal Server Error` if the file append fails.
@@ -104,6 +105,23 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
     "readTimeout": "10s"
   }
   ```
+
+### POST `/api/v1/metadata/description`
+- **Purpose:** Returns the `<meta name="description">` (or OpenGraph description) for a supplied public URL so the UI can pre-fill streamer descriptions.
+- **Request body:**
+  ```json
+  {
+    "url": "https://www.youtube.com/@example"
+  }
+  ```
+- **Response:**
+  ```json
+  {
+    "description": "Channel summary pulled from the destination site.",
+    "title": "Example Channel"
+  }
+  ```
+- **Notes:** Only `http`/`https` URLs are allowed. A `502` is returned if scraping fails.
 
 ### Static asset hosting
 - Requests to `/` fall back to the WebAssembly UI served from `web/algui`. When the assets are missing, the server responds with `200 OK` and the message `"alGUI assets not configured"`.

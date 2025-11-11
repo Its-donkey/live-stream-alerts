@@ -11,6 +11,7 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"syscall/js"
 	"time"
@@ -43,7 +44,6 @@ type platformFormRow struct {
 }
 
 type platformFieldError struct {
-	Name    bool
 	Channel bool
 }
 
@@ -101,6 +101,15 @@ type createStreamerResponse struct {
 		ID    string `json:"id"`
 		Alias string `json:"alias"`
 	} `json:"streamer"`
+}
+
+type metadataRequest struct {
+	URL string `json:"url"`
+}
+
+type metadataResponse struct {
+	Description string `json:"description"`
+	Title       string `json:"title"`
 }
 
 var (
@@ -591,8 +600,8 @@ func renderSubmitForm() {
 		}
 		builder.WriteString(`<label class="` + nameClass + `" id="field-name"><span>Streamer name *</span><input type="text" id="streamer-name" value="` + html.EscapeString(submitState.Name) + `" required /></label>`)
 
-		// Platform fieldset (moved above description)
-		builder.WriteString(`<fieldset class="platform-fieldset"><legend>Streaming platforms *</legend><p class="submit-streamer-help">Add each platform’s name and channel URL. If they’re the same stream link, repeat the URL.</p>`)
+		// Platform fieldset
+		builder.WriteString(`<fieldset class="platform-fieldset form-field-wide"><legend>Streaming platforms *</legend><p class="submit-streamer-help">Add each platform’s name and channel URL. If they’re the same stream link, repeat the URL.</p>`)
 		builder.WriteString(`<div class="platform-rows">`)
 		for _, row := range submitState.Platforms {
 			errors := submitState.Errors.Platforms[row.ID]
@@ -612,13 +621,6 @@ func renderSubmitForm() {
 			builder.WriteString(`</div>`)
 		}
 		builder.WriteString(`</div>`)
-
-		addDisabled := ""
-		if len(submitState.Platforms) >= maxPlatforms {
-			addDisabled = " disabled"
-		}
-		builder.WriteString(`<button type="button" class="add-platform-button" id="add-platform"` + addDisabled + `>+ Add another platform</button>`)
-		builder.WriteString(`</fieldset>`)
 
 		// Description
 		descClass := "form-field form-field-wide"
@@ -662,6 +664,13 @@ func renderSubmitForm() {
 			builder.WriteString(`<p class="field-error-text">Select at least one language.</p>`)
 		}
 		builder.WriteString(`</label></div>`) // end languages label and grid
+
+		addDisabled := ""
+		if len(submitState.Platforms) >= maxPlatforms {
+			addDisabled = " disabled"
+		}
+		builder.WriteString(`<button type="button" class="add-platform-button" id="add-platform"` + addDisabled + `>+ Add another platform</button>`)
+		builder.WriteString(`</fieldset>`)
 
 		// Actions
 		builder.WriteString(`<div class="submit-streamer-actions">`)
@@ -808,24 +817,6 @@ func bindSubmitFormEvents() {
 		})
 	})
 
-	platformNameInputs := document.Call("querySelectorAll", "[data-platform-name]")
-	forEachNode(platformNameInputs, func(node js.Value) {
-		addFormHandler(node, "input", func(this js.Value, _ []js.Value) any {
-			rowID := this.Get("dataset").Get("row").String()
-			value := this.Get("value").String()
-			for index, row := range submitState.Platforms {
-				if row.ID == rowID {
-					submitState.Platforms[index].Name = value
-					if strings.TrimSpace(value) != "" {
-						clearPlatformError(rowID, "name")
-					}
-					break
-				}
-			}
-			return nil
-		})
-	})
-
 	platformInputs := document.Call("querySelectorAll", "[data-platform-channel]")
 	forEachNode(platformInputs, func(node js.Value) {
 		addFormHandler(node, "input", func(this js.Value, _ []js.Value) any {
@@ -834,9 +825,26 @@ func bindSubmitFormEvents() {
 			for index, row := range submitState.Platforms {
 				if row.ID == rowID {
 					submitState.Platforms[index].ChannelURL = value
+					submitState.Platforms[index].Name = derivePlatformLabel(value)
 					if strings.TrimSpace(value) != "" {
 						clearPlatformError(rowID, "channel")
 					}
+					currentValue := value
+					go func(target string) {
+						if strings.TrimSpace(submitState.Description) != "" {
+							return
+						}
+						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+						defer cancel()
+						if extracted, err := requestChannelDescription(ctx, target); err == nil {
+							extracted = strings.TrimSpace(extracted)
+							if extracted != "" && strings.TrimSpace(submitState.Description) == "" {
+								submitState.Description = extracted
+								submitState.Errors.Description = false
+								scheduleRender()
+							}
+						}
+					}(currentValue)
 					break
 				}
 			}
@@ -947,17 +955,14 @@ func clearPlatformError(rowID, field string) {
 		return
 	}
 	switch field {
-	case "name":
-		platformErr.Name = false
 	case "channel":
 		platformErr.Channel = false
 	}
-	if !platformErr.Name && !platformErr.Channel {
+	if !platformErr.Channel {
 		delete(submitState.Errors.Platforms, rowID)
 	} else {
 		submitState.Errors.Platforms[rowID] = platformErr
 	}
-	markFieldError("platform-name-field-"+rowID, platformErr.Name)
 	markFieldError("platform-url-field-"+rowID, platformErr.Channel)
 }
 
@@ -1028,10 +1033,9 @@ func validateSubmission() bool {
 
 	for _, row := range submitState.Platforms {
 		rowErr := platformFieldError{
-			Name:    strings.TrimSpace(row.Name) == "",
 			Channel: strings.TrimSpace(row.ChannelURL) == "",
 		}
-		if rowErr.Name || rowErr.Channel {
+		if rowErr.Channel {
 			errors.Platforms[row.ID] = rowErr
 		}
 	}
@@ -1087,6 +1091,44 @@ func submitStreamerRequest(ctx context.Context, payload createStreamerRequest) (
 	}
 }
 
+func requestChannelDescription(ctx context.Context, target string) (string, error) {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return "", errors.New("empty url")
+	}
+	reqPayload, err := json.Marshal(metadataRequest{URL: target})
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/metadata/description", bytes.NewReader(reqPayload))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf(strings.TrimSpace(string(body)))
+	}
+
+	var meta metadataResponse
+	if err := json.Unmarshal(body, &meta); err != nil {
+		return "", err
+	}
+	return meta.Description, nil
+}
+
 func buildStreamerDescription(description string, platforms []platformFormRow) string {
 	desc := strings.TrimSpace(description)
 	platformSummary := formatPlatformSummary(platforms)
@@ -1117,6 +1159,30 @@ func formatPlatformSummary(platforms []platformFormRow) string {
 		}
 	}
 	return strings.Join(parts, ", ")
+}
+
+func derivePlatformLabel(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if parsed, err := url.Parse(raw); err == nil && parsed.Host != "" {
+		return parsed.Host
+	}
+	if strings.HasPrefix(raw, "@") {
+		return raw
+	}
+	return raw
+}
+
+func scheduleRender() {
+	var fn js.Func
+	fn = js.FuncOf(func(js.Value, []js.Value) any {
+		renderSubmitForm()
+		fn.Release()
+		return nil
+	})
+	js.Global().Call("setTimeout", fn, 0)
 }
 
 func clearFormFields() {

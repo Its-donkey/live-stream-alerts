@@ -7,6 +7,7 @@ import (
 	"net/http/httputil"
 
 	"live-stream-alerts/internal/logging"
+	metadatahandlers "live-stream-alerts/internal/metadata/handlers"
 	ytclienthandlers "live-stream-alerts/internal/platforms/youtube/handlers"
 	streamershandlers "live-stream-alerts/internal/streamers/handlers"
 )
@@ -43,6 +44,8 @@ func New(opts Options) http.Handler {
 	mux.Handle("/api/v1/streamers", streamershandlers.NewCreateHandler(streamershandlers.CreateOptions{
 		Logger: logger,
 	}))
+
+	mux.Handle("/api/v1/metadata/description", metadatahandlers.DescriptionHandler(metadatahandlers.DescriptionHandlerOptions{}))
 
 	mux.HandleFunc("/api/v1/server/config", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, opts.RuntimeInfo)
