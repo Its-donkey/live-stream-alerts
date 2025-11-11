@@ -37,6 +37,9 @@ func SubscriptionConfirmation(w http.ResponseWriter, r *http.Request, logger log
 	w.Header().Set("Content-Length", strconv.Itoa(len(challenge)))
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, challenge)
+	if logger != nil {
+		logger.Printf("Hub challenge reply sent with status=200 body=%q", challenge)
+	}
 
 	return true
 }
