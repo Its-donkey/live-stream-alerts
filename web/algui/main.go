@@ -593,12 +593,6 @@ func renderSubmitForm() {
 
 		// Form grid
 		builder.WriteString(`<div class="form-grid">`)
-		// Name field
-		nameClass := "form-field"
-		if submitState.Errors.Name {
-			nameClass += " form-field-error"
-		}
-		builder.WriteString(`<label class="` + nameClass + `" id="field-name"><span>Streamer name *</span><input type="text" id="streamer-name" value="` + html.EscapeString(submitState.Name) + `" required /></label>`)
 
 		// Platform fieldset
 		builder.WriteString(`<fieldset class="platform-fieldset form-field-wide"><legend>Streaming platforms *</legend><p class="submit-streamer-help">Add each platform’s name and channel URL. If they’re the same stream link, repeat the URL.</p>`)
@@ -621,6 +615,21 @@ func renderSubmitForm() {
 			builder.WriteString(`</div>`)
 		}
 		builder.WriteString(`</div>`)
+
+		addDisabled := ""
+		if len(submitState.Platforms) >= maxPlatforms {
+			addDisabled = " disabled"
+		}
+
+		builder.WriteString(`<button type="button" class="add-platform-button" id="add-platform"` + addDisabled + `>+ Add another platform</button>`)
+		builder.WriteString(`</fieldset>`)
+
+		// Name field
+		nameClass := "form-field"
+		if submitState.Errors.Name {
+			nameClass += " form-field-error"
+		}
+		builder.WriteString(`<label class="` + nameClass + `" id="field-name"><span>Streamer name *</span><input type="text" id="streamer-name" value="` + html.EscapeString(submitState.Name) + `" required /></label>`)
 
 		// Description
 		descClass := "form-field form-field-wide"
@@ -665,12 +674,8 @@ func renderSubmitForm() {
 		}
 		builder.WriteString(`</label></div>`) // end languages label and grid
 
-		addDisabled := ""
-		if len(submitState.Platforms) >= maxPlatforms {
-			addDisabled = " disabled"
-		}
-		builder.WriteString(`<button type="button" class="add-platform-button" id="add-platform"` + addDisabled + `>+ Add another platform</button>`)
-		builder.WriteString(`</fieldset>`)
+
+
 
 		// Actions
 		builder.WriteString(`<div class="submit-streamer-actions">`)

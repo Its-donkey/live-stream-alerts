@@ -89,20 +89,29 @@ func fetchDescription(ctx context.Context, client *http.Client, target string) (
 		return "", "", fmt.Errorf("failed to parse page")
 	}
 
-	if desc, ok := doc.Find(`meta[name="description"]`).Attr("content"); ok {
-		if trimmed := strings.TrimSpace(desc); trimmed != "" {
-			return trimmed, strings.TrimSpace(doc.Find("title").Text()), nil
-		}
+	title := firstNonEmpty(
+		doc.Find(`meta[property="og:title"]`).AttrOr("content", ""),
+		doc.Find(`meta[name="twitter:title"]`).AttrOr("content", ""),
+		doc.Find("title").Text(),
+	)
+	desc := firstNonEmpty(
+		doc.Find(`meta[name="description"]`).AttrOr("content", ""),
+		doc.Find(`meta[property="og:description"]`).AttrOr("content", ""),
+	)
+	if desc == "" {
+		desc = title
 	}
-	if desc, ok := doc.Find(`meta[property="og:description"]`).Attr("content"); ok {
-		if trimmed := strings.TrimSpace(desc); trimmed != "" {
-			return trimmed, strings.TrimSpace(doc.Find("title").Text()), nil
-		}
-	}
-
-	title := strings.TrimSpace(doc.Find("title").Text())
-	if title == "" {
+	if desc == "" && title == "" {
 		return "", "", fmt.Errorf("description not found")
 	}
-	return title, title, nil
+	return desc, title, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if trimmed := strings.TrimSpace(v); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
