@@ -1179,36 +1179,8 @@ func requestChannelDescription(ctx context.Context, target string) (string, stri
 	return meta.Description, meta.Title, meta.Handle, meta.ChannelID, nil
 }
 
-func buildStreamerDescription(description string, platforms []platformFormRow) string {
-	desc := strings.TrimSpace(description)
-	platformSummary := formatPlatformSummary(platforms)
-	switch {
-	case desc != "" && platformSummary != "":
-		return desc + "\n\nPlatforms: " + platformSummary
-	case desc != "":
-		return desc
-	case platformSummary != "":
-		return "Platforms: " + platformSummary
-	default:
-		return ""
-	}
-}
-
-func formatPlatformSummary(platforms []platformFormRow) string {
-	var parts []string
-	for _, row := range platforms {
-		name := strings.TrimSpace(firstNonEmpty(row.Name, row.Handle))
-		url := strings.TrimSpace(row.ChannelURL)
-		switch {
-		case name != "" && url != "":
-			parts = append(parts, fmt.Sprintf("%s (%s)", name, url))
-		case name != "":
-			parts = append(parts, name)
-		case url != "":
-			parts = append(parts, url)
-		}
-	}
-	return strings.Join(parts, ", ")
+func buildStreamerDescription(description string, _ []platformFormRow) string {
+	return strings.TrimSpace(description)
 }
 
 func derivePlatformLabel(raw string) string {
