@@ -1003,7 +1003,7 @@ func handleSubmit() {
 
 	trimmedName := strings.TrimSpace(submitState.Name)
 	trimmedDescription := strings.TrimSpace(submitState.Description)
-	description := buildStreamerDescription(trimmedDescription, submitState.Languages, submitState.Platforms)
+	description := buildStreamerDescription(trimmedDescription, submitState.Platforms)
 	payload := createStreamerRequest{
 		Streamer: streamerPayload{
 			Alias:       trimmedName,
@@ -1116,18 +1116,19 @@ func submitStreamerRequest(ctx context.Context, payload createStreamerRequest) (
 	}
 }
 
-func buildStreamerDescription(description string, languages []string, platforms []platformFormRow) string {
-	var sections []string
-	if description != "" {
-		sections = append(sections, description)
+func buildStreamerDescription(description string, platforms []platformFormRow) string {
+	desc := strings.TrimSpace(description)
+	platformSummary := formatPlatformSummary(platforms)
+	switch {
+	case desc != "" && platformSummary != "":
+		return desc + "\n\nPlatforms: " + platformSummary
+	case desc != "":
+		return desc
+	case platformSummary != "":
+		return "Platforms: " + platformSummary
+	default:
+		return ""
 	}
-	if len(languages) > 0 {
-		sections = append(sections, "Languages: "+strings.Join(languages, ", "))
-	}
-	if platformSummary := formatPlatformSummary(platforms); platformSummary != "" {
-		sections = append(sections, "Platforms: "+platformSummary)
-	}
-	return strings.Join(sections, "\n\n")
 }
 
 func formatPlatformSummary(platforms []platformFormRow) string {
