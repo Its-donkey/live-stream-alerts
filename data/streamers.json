@@ -212,6 +212,28 @@
       },
       "createdAt": "2025-11-10T14:41:50.260945Z",
       "updatedAt": "2025-11-10T14:41:50.260945Z"
+    },
+    {
+      "streamer": {
+        "id": "TedConingsby",
+        "alias": "Ted Coningsby",
+        "description": "Oii oii! Ladies, gents and teddy bears, welcome to the Ted Coningsby channel, the fun but serious military aviation channel. This is not your usual aviation ...\n\nPlatforms: www.youtube.com (https://www.youtube.com/@TedConingsby)",
+        "firstName": "",
+        "lastName": "",
+        "email": "",
+        "languages": [
+          "English"
+        ]
+      },
+      "platforms": {
+        "youtube": {
+          "handle": "@TedConingsby",
+          "channelId": "UCCVgP53k4WCUnFg9yFA_YbA",
+          "hubSecret": "4ab8e15654e9b27185de946917e6fa2e"
+        }
+      },
+      "createdAt": "2025-11-11T13:08:25.54831Z",
+      "updatedAt": "2025-11-11T13:08:25.54831Z"
     }
   ]
 }

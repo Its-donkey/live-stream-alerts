@@ -22,6 +22,8 @@ type DescriptionRequest struct {
 type DescriptionResponse struct {
 	Description string `json:"description"`
 	Title       string `json:"title"`
+	Handle      string `json:"handle"`
+	ChannelID   string `json:"channelId"`
 }
 
 // DescriptionHandlerOptions configures the description handler.
@@ -60,33 +62,38 @@ func DescriptionHandler(opts DescriptionHandlerOptions) http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		desc, title, err := fetchDescription(ctx, client, parsed.String())
+		desc, title, handle, channelID, err := fetchDescription(ctx, client, parsed.String())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(DescriptionResponse{Description: desc, Title: title})
+		_ = json.NewEncoder(w).Encode(DescriptionResponse{
+			Description: desc,
+			Title:       title,
+			Handle:      handle,
+			ChannelID:   channelID,
+		})
 	})
 }
 
-func fetchDescription(ctx context.Context, client *http.Client, target string) (string, string, error) {
+func fetchDescription(ctx context.Context, client *http.Client, target string) (string, string, string, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
-		return "", "", err
+		return "", "", "", "", err
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", err
+		return "", "", "", "", err
 	}
 	defer resp.Body.Close()
 
 	limited := io.LimitReader(resp.Body, 2<<20) // 2 MB
 	doc, err := goquery.NewDocumentFromReader(limited)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to parse page")
+		return "", "", "", "", fmt.Errorf("failed to parse page")
 	}
 
 	title := firstNonEmpty(
@@ -102,9 +109,26 @@ func fetchDescription(ctx context.Context, client *http.Client, target string) (
 		desc = title
 	}
 	if desc == "" && title == "" {
-		return "", "", fmt.Errorf("description not found")
+		return "", "", "", "", fmt.Errorf("description not found")
 	}
-	return desc, title, nil
+
+	pageURL := firstNonEmpty(
+		doc.Find(`meta[property="og:url"]`).AttrOr("content", ""),
+		doc.Find(`link[rel="canonical"]`).AttrOr("href", ""),
+		target,
+	)
+	handle := deriveHandle(pageURL)
+	channelID := firstNonEmpty(
+		doc.Find(`meta[itemprop="channelId"]`).AttrOr("content", ""),
+		parseChannelID(pageURL),
+	)
+	if handle == "" {
+		handle = deriveHandle(target)
+	}
+	if channelID == "" {
+		channelID = parseChannelID(target)
+	}
+	return desc, title, handle, channelID, nil
 }
 
 func firstNonEmpty(values ...string) string {
@@ -112,6 +136,33 @@ func firstNonEmpty(values ...string) string {
 		if trimmed := strings.TrimSpace(v); trimmed != "" {
 			return trimmed
 		}
+	}
+	return ""
+}
+
+func deriveHandle(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) == 0 {
+		return ""
+	}
+	if strings.HasPrefix(parts[0], "@") {
+		return parts[0]
+	}
+	return ""
+}
+
+func parseChannelID(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) >= 2 && parts[0] == "channel" {
+		return parts[1]
 	}
 	return ""
 }

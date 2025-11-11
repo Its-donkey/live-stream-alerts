@@ -5,6 +5,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,6 +43,9 @@ type platformFormRow struct {
 	Name       string
 	Preset     string
 	ChannelURL string
+	Handle     string
+	ChannelID  string
+	HubSecret  string
 }
 
 type platformFieldError struct {
@@ -86,6 +91,7 @@ type streamerPlatforms struct {
 type platformYouTube struct {
 	Handle    string `json:"handle"`
 	ChannelID string `json:"channelId,omitempty"`
+	HubSecret string `json:"hubSecret,omitempty"`
 }
 
 type platformFacebook struct {
@@ -110,6 +116,8 @@ type metadataRequest struct {
 type metadataResponse struct {
 	Description string `json:"description"`
 	Title       string `json:"title"`
+	Handle      string `json:"handle"`
+	ChannelID   string `json:"channelId"`
 }
 
 var (
@@ -824,35 +832,49 @@ func bindSubmitFormEvents() {
 		addFormHandler(node, "input", func(this js.Value, _ []js.Value) any {
 			rowID := this.Get("dataset").Get("row").String()
 			value := this.Get("value").String()
-			for index, row := range submitState.Platforms {
+			for index := range submitState.Platforms {
+				row := &submitState.Platforms[index]
 				if row.ID == rowID {
-					submitState.Platforms[index].ChannelURL = value
-					submitState.Platforms[index].Name = derivePlatformLabel(value)
+					row.ChannelURL = value
+					row.Name = derivePlatformLabel(value)
 					if strings.TrimSpace(value) != "" {
 						clearPlatformError(rowID, "channel")
 					}
 					currentValue := value
+					rowIndex := index
 					go func(target string) {
 						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 						defer cancel()
-						desc, title, err := requestChannelDescription(ctx, target)
+						desc, title, handle, channelID, err := requestChannelDescription(ctx, target)
 						if err != nil {
 							return
 						}
+						metaDesc := strings.TrimSpace(desc)
+						metaTitle := strings.TrimSpace(title)
+						metaHandle := strings.TrimSpace(handle)
+						metaChannelID := strings.TrimSpace(channelID)
 						updated := false
-						if strings.TrimSpace(submitState.Description) == "" {
-							if trimmed := strings.TrimSpace(desc); trimmed != "" {
-								submitState.Description = trimmed
-								submitState.Errors.Description = false
-								updated = true
-							}
+						if metaDesc != "" && strings.TrimSpace(submitState.Description) == "" {
+							submitState.Description = metaDesc
+							submitState.Errors.Description = false
+							updated = true
 						}
-						if strings.TrimSpace(submitState.Name) == "" {
-							if trimmed := strings.TrimSpace(title); trimmed != "" {
-								submitState.Name = trimmed
-								submitState.Errors.Name = false
-								updated = true
-							}
+						if metaTitle != "" && strings.TrimSpace(submitState.Name) == "" {
+							submitState.Name = metaTitle
+							submitState.Errors.Name = false
+							updated = true
+						}
+						if metaHandle != "" {
+							submitState.Platforms[rowIndex].Handle = metaHandle
+							updated = true
+						}
+						if metaChannelID != "" {
+							submitState.Platforms[rowIndex].ChannelID = metaChannelID
+							updated = true
+						}
+						if submitState.Platforms[rowIndex].HubSecret == "" {
+							submitState.Platforms[rowIndex].HubSecret = generateHubSecret()
+							updated = true
 						}
 						if updated {
 							scheduleRender()
@@ -1001,6 +1023,21 @@ func handleSubmit() {
 		},
 	}
 
+	if len(submitState.Platforms) > 0 {
+		youtube := submitState.Platforms[0]
+		if strings.TrimSpace(youtube.ChannelURL) != "" || youtube.Handle != "" || youtube.ChannelID != "" {
+			if strings.TrimSpace(youtube.HubSecret) == "" {
+				youtube.HubSecret = generateHubSecret()
+				submitState.Platforms[0] = youtube
+			}
+			payload.Platforms.YouTube = &platformYouTube{
+				Handle:    youtube.Handle,
+				ChannelID: youtube.ChannelID,
+				HubSecret: youtube.HubSecret,
+			}
+		}
+	}
+
 	submitState.Submitting = true
 	submitState.ResultState = ""
 	submitState.ResultMessage = ""
@@ -1104,42 +1141,42 @@ func submitStreamerRequest(ctx context.Context, payload createStreamerRequest) (
 	}
 }
 
-func requestChannelDescription(ctx context.Context, target string) (string, string, error) {
+func requestChannelDescription(ctx context.Context, target string) (string, string, string, string, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
-		return "", "", errors.New("empty url")
+		return "", "", "", "", errors.New("empty url")
 	}
 	reqPayload, err := json.Marshal(metadataRequest{URL: target})
 	if err != nil {
-		return "", "", err
+		return "", "", "", "", err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/metadata/description", bytes.NewReader(reqPayload))
 	if err != nil {
-		return "", "", err
+		return "", "", "", "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", "", err
+		return "", "", "", "", err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", err
+		return "", "", "", "", err
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", "", fmt.Errorf(strings.TrimSpace(string(body)))
+		return "", "", "", "", fmt.Errorf(strings.TrimSpace(string(body)))
 	}
 
 	var meta metadataResponse
 	if err := json.Unmarshal(body, &meta); err != nil {
-		return "", "", err
+		return "", "", "", "", err
 	}
-	return meta.Description, meta.Title, nil
+	return meta.Description, meta.Title, meta.Handle, meta.ChannelID, nil
 }
 
 func buildStreamerDescription(description string, platforms []platformFormRow) string {
@@ -1160,7 +1197,7 @@ func buildStreamerDescription(description string, platforms []platformFormRow) s
 func formatPlatformSummary(platforms []platformFormRow) string {
 	var parts []string
 	for _, row := range platforms {
-		name := strings.TrimSpace(row.Name)
+		name := strings.TrimSpace(firstNonEmpty(row.Name, row.Handle))
 		url := strings.TrimSpace(row.ChannelURL)
 		switch {
 		case name != "" && url != "":
@@ -1179,11 +1216,17 @@ func derivePlatformLabel(raw string) string {
 	if raw == "" {
 		return ""
 	}
-	if parsed, err := url.Parse(raw); err == nil && parsed.Host != "" {
-		return parsed.Host
-	}
 	if strings.HasPrefix(raw, "@") {
 		return raw
+	}
+	if parsed, err := url.Parse(raw); err == nil {
+		if host := parsed.Hostname(); host != "" {
+			return host
+		}
+		segments := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+		if len(segments) > 0 && strings.HasPrefix(segments[0], "@") {
+			return segments[0]
+		}
 	}
 	return raw
 }
@@ -1196,6 +1239,23 @@ func scheduleRender() {
 		return nil
 	})
 	js.Global().Call("setTimeout", fn, 0)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if trimmed := strings.TrimSpace(v); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func generateHubSecret() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("hub-%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
 }
 
 func clearFormFields() {
