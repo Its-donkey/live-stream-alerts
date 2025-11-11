@@ -67,7 +67,10 @@ type TwitchPlatform struct {
 	BroadcasterID string `json:"broadcasterId,omitempty"`
 }
 
-var fileMu sync.Mutex
+var (
+	fileMu                 sync.Mutex
+	ErrDuplicateStreamerID = errors.New("streamer id already exists")
+)
 
 // Append adds a new streamer record to disk and returns a copy with timestamps populated.
 func Append(path string, record Record) (Record, error) {
@@ -96,6 +99,12 @@ func Append(path string, record Record) (Record, error) {
 	now := time.Now().UTC()
 	record.CreatedAt = now
 	record.UpdatedAt = now
+
+	for _, existing := range fileData.Records {
+		if existing.Streamer.ID == record.Streamer.ID {
+			return Record{}, fmt.Errorf("%w: %s", ErrDuplicateStreamerID, record.Streamer.ID)
+		}
+	}
 
 	fileData.Records = append(fileData.Records, record)
 

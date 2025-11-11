@@ -11,6 +11,7 @@
 - Rebuilt the `web/algui` UI in Go WASM so the landing page now mirrors the original React roster (including styling, status badges, the SubmitStreamerForm, and a static fallback dataset).
 - Added `streamer.description` to the schema and storage model so submissions can describe what makes each streamer unique.
 - Derived `streamer.id` from the alias by stripping whitespace/punctuation and tightened the schema to enforce alphanumeric IDs.
+- Reject duplicate streamer aliases by enforcing unique cleaned IDs during persistence and documenting the resulting `409 Conflict` behavior.
 - Added `web/README.md` so contributors know how to build and serve the alGUI assets.
 - Added a JSON schema (`schema/streamers.schema.json`) and typed storage layer for streamers so data persists with server-managed IDs and timestamps.
 - Stubbed platform folders (`internal/platforms/{youtube,facebook,twitch}`) plus shared logging utilities to support future providers.

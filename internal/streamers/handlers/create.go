@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -84,6 +85,10 @@ func createStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 
 	record, err := streamers.Append(path, req)
 	if err != nil {
+		if errors.Is(err, streamers.ErrDuplicateStreamerID) {
+			http.Error(w, "a streamer with that alias already exists", http.StatusConflict)
+			return
+		}
 		if logger != nil {
 			logger.Printf("failed to append streamer: %v", err)
 		}

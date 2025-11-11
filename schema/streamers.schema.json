@@ -9,7 +9,7 @@
         "id": {
           "type": "string",
           "pattern": "^[A-Za-z0-9]+$",
-          "description": "Cleaned alias with all spaces, punctuation, and special characters removed",
+          "description": "Cleaned alias with all spaces, punctuation, and special characters removed (must be unique across all streamers)",
           "readOnly": true
         },
 			"alias": {
