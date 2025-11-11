@@ -30,13 +30,14 @@ type Record struct {
 
 // Streamer captures personal information for a streamer.
 type Streamer struct {
-	ID        string `json:"id"`
-	Alias     string `json:"alias"`
-	FirstName string `json:"firstName"`
-	LastName  string `json:"lastName"`
-	Email     string `json:"email"`
-	City      string `json:"city,omitempty"`
-	Country   string `json:"country,omitempty"`
+	ID          string `json:"id"`
+	Alias       string `json:"alias"`
+	Description string `json:"description,omitempty"`
+	FirstName   string `json:"firstName"`
+	LastName    string `json:"lastName"`
+	Email       string `json:"email"`
+	City        string `json:"city,omitempty"`
+	Country     string `json:"country,omitempty"`
 }
 
 // Platforms groups platform-specific configuration.

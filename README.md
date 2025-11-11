@@ -73,6 +73,7 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
   {
     "streamer": {
       "alias": "SharpenDev",
+      "description": "Tantalum chef knife maker focusing on live sharpening Q&A.",
       "firstName": "Jane",
       "lastName": "Doe",
       "email": "jane@example.com"
@@ -86,8 +87,7 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
     }
   }
   ```
-- **Server-managed fields:** Any incoming `streamer.id`, `createdAt`, or `updatedAt` values are ignored; IDs and timestamps are injected when the record is stored.
-- **Validation:** `streamer.firstName`, `streamer.lastName`, and `streamer.email` must be non-empty. When the YouTube block is present, `platforms.youtube.handle` is also required.
+- **Server-managed fields:** `streamer.id` is derived from the alias by removing whitespace, punctuation, and other non-alphanumeric characters. Incoming IDs, `createdAt`, and `updatedAt` values are ignored; timestamps are injected when the record is stored.
 - **Validation:** `streamer.alias` must be non-empty. When the YouTube block is present, `platforms.youtube.handle` is also required.
 - **Response:** `201 Created` with the stored record echoed back as JSON, or `500 Internal Server Error` if the file append fails.
 

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/streamers"
@@ -78,8 +79,6 @@ func createStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 		return
 	}
 
-	// IDs are server-managed. Ignore any client-provided value.
-	req.Streamer.ID = ""
 	req.CreatedAt = time.Time{}
 	req.UpdatedAt = time.Time{}
 
@@ -105,6 +104,11 @@ func validateRecord(record *streamers.Record) error {
 	if record.Streamer.Alias == "" {
 		return fmt.Errorf("streamer.alias is required")
 	}
+	if sanitized := sanitizeAliasForID(record.Streamer.Alias); sanitized == "" {
+		return fmt.Errorf("streamer.alias must contain at least one letter or digit")
+	} else {
+		record.Streamer.ID = sanitized
+	}
 
 	if record.Platforms.YouTube != nil {
 		record.Platforms.YouTube.Handle = strings.TrimSpace(record.Platforms.YouTube.Handle)
@@ -113,4 +117,14 @@ func validateRecord(record *streamers.Record) error {
 		}
 	}
 	return nil
+}
+
+func sanitizeAliasForID(alias string) string {
+	var builder strings.Builder
+	for _, r := range alias {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			builder.WriteRune(r)
+		}
+	}
+	return builder.String()
 }

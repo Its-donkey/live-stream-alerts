@@ -8,8 +8,8 @@
 		"properties": {
         "id": {
           "type": "string",
-          "format": "uuid",
-          "description": "Unique ID automatically generated internally",
+          "pattern": "^[A-Za-z0-9]+$",
+          "description": "Cleaned alias with all spaces, punctuation, and special characters removed",
           "readOnly": true
         },
 			"alias": {
@@ -23,6 +23,10 @@
 			"lastName": {
 			"type": "string",
 			"description": "Last name of streamer"
+			},
+			"description": {
+			"type": "string",
+			"description": "Description of what the streamer does and what makes their streams unique"
 			},
 			"email": {
 			"type": "string",
