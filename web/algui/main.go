@@ -263,9 +263,7 @@ func refreshRoster() {
 
 func fetchStreamers(ctx context.Context) ([]streamer, error) {
 	endpoints := []string{
-		"/api/streamers",
 		"/api/v1/streamers",
-		"streamers.json",
 	}
 
 	client := &http.Client{Timeout: 8 * time.Second}
@@ -593,6 +591,35 @@ func renderSubmitForm() {
 		}
 		builder.WriteString(`<label class="` + nameClass + `" id="field-name"><span>Streamer name *</span><input type="text" id="streamer-name" value="` + html.EscapeString(submitState.Name) + `" required /></label>`)
 
+		// Platform fieldset (moved above description)
+		builder.WriteString(`<fieldset class="platform-fieldset"><legend>Streaming platforms *</legend><p class="submit-streamer-help">Add each platform’s name and channel URL. If they’re the same stream link, repeat the URL.</p>`)
+		builder.WriteString(`<div class="platform-rows">`)
+		for _, row := range submitState.Platforms {
+			errors := submitState.Errors.Platforms[row.ID]
+			channelWrapper := "form-field form-field-inline highlight-change"
+			if errors.Channel {
+				channelWrapper += " form-field-error"
+			}
+			builder.WriteString(`<div class="platform-row" data-platform-row="` + row.ID + `">`)
+			builder.WriteString(`<label class="` + channelWrapper + `" id="platform-url-field-` + row.ID + `"><span>Channel URL</span>`)
+			builder.WriteString(`<input type="url" placeholder="https://example.com/live or @handle" value="` + html.EscapeString(row.ChannelURL) + `" data-platform-channel data-row="` + row.ID + `" required />`)
+			builder.WriteString(`</label>`)
+
+			builder.WriteString(`<button type="button" class="remove-platform-button" data-remove-platform="` + row.ID + `">Remove</button>`)
+			if errors.Channel {
+				builder.WriteString(`<p class="field-error-text">Provide a valid channel URL.</p>`)
+			}
+			builder.WriteString(`</div>`)
+		}
+		builder.WriteString(`</div>`)
+
+		addDisabled := ""
+		if len(submitState.Platforms) >= maxPlatforms {
+			addDisabled = " disabled"
+		}
+		builder.WriteString(`<button type="button" class="add-platform-button" id="add-platform"` + addDisabled + `>+ Add another platform</button>`)
+		builder.WriteString(`</fieldset>`)
+
 		// Description
 		descClass := "form-field form-field-wide"
 		if submitState.Errors.Description {
@@ -635,39 +662,6 @@ func renderSubmitForm() {
 			builder.WriteString(`<p class="field-error-text">Select at least one language.</p>`)
 		}
 		builder.WriteString(`</label></div>`) // end languages label and grid
-
-		// Platform fieldset
-		builder.WriteString(`<fieldset class="platform-fieldset"><legend>Streaming platforms *</legend><p class="submit-streamer-help">Add each platform’s name and channel URL. If they’re the same stream link, repeat the URL.</p>`)
-		builder.WriteString(`<div class="platform-rows">`)
-		for _, row := range submitState.Platforms {
-			errors := submitState.Errors.Platforms[row.ID]
-			nameWrapper := "form-field form-field-inline"
-			if errors.Name {
-				nameWrapper += " form-field-error"
-			}
-			channelWrapper := "form-field form-field-inline"
-			if errors.Channel {
-				channelWrapper += " form-field-error"
-			}
-			builder.WriteString(`<div class="platform-row" data-platform-row="` + row.ID + `">`)
-			builder.WriteString(`<label class="` + nameWrapper + `" id="platform-name-field-` + row.ID + `"><span>Platform name</span><input type="text" data-platform-name data-row="` + row.ID + `" placeholder="e.g. YouTube" value="` + html.EscapeString(row.Name) + `" required /></label>`)
-
-			builder.WriteString(`<label class="` + channelWrapper + `" id="platform-url-field-` + row.ID + `"><span>Channel URL</span><input type="url" placeholder="https://" value="` + html.EscapeString(row.ChannelURL) + `" data-platform-channel data-row="` + row.ID + `" required /></label>`)
-
-			builder.WriteString(`<button type="button" class="remove-platform-button" data-remove-platform="` + row.ID + `">Remove</button>`)
-			if errors.Name || errors.Channel {
-				builder.WriteString(`<p class="field-error-text">Provide the platform name and channel URL.</p>`)
-			}
-			builder.WriteString(`</div>`)
-		}
-		builder.WriteString(`</div>`)
-
-		addDisabled := ""
-		if len(submitState.Platforms) >= maxPlatforms {
-			addDisabled = " disabled"
-		}
-		builder.WriteString(`<button type="button" class="add-platform-button" id="add-platform"` + addDisabled + `>+ Add another platform</button>`)
-		builder.WriteString(`</fieldset>`)
 
 		// Actions
 		builder.WriteString(`<div class="submit-streamer-actions">`)
