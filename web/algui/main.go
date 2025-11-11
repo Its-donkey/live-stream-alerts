@@ -209,12 +209,7 @@ var platformPresets = []string{
 	"YouTube",
 	"Twitch",
 	"Facebook Live",
-	"Instagram Live",
-	"Kick",
-	"TikTok Live",
-	"Trovo",
-	"Rumble",
-	"Discord",
+
 }
 
 func main() {
@@ -604,7 +599,7 @@ func renderSubmitForm() {
 		if submitState.Errors.Description {
 			descClass += " form-field-error"
 		}
-		builder.WriteString(`<label class="` + descClass + `" id="field-description"><span>Description *</span><p class="submit-streamer-help">What does the streamer do and what makes their streams unique?</p><textarea id="streamer-description" rows="3" required>`)
+		builder.WriteString(`<label class="` + descClass + `" id="field-description"><span>Description *</span><p class="submit-streamer-help">What does the streamer do and what makes their streams unique?</p><textarea id="streamer-description" rows="3">`)
 		builder.WriteString(html.EscapeString(submitState.Description))
 		builder.WriteString(`</textarea></label>`)
 

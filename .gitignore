@@ -12,7 +12,7 @@
 *.log
 
 # Project binaries
-cmd/alertserver/out.bin
+out.bin
 
 # WebAssembly build artifacts
 web/algui/main.wasm
@@ -21,3 +21,5 @@ web/algui/main.wasm
 bin/
 dist/
 cover/
+frontend/
+*.zip

@@ -38,10 +38,6 @@ func New(opts Options) http.Handler {
 		Logger: logger,
 	}))
 
-	mux.Handle("/api/v1/youtube/new/subscribe", ytclienthandlers.NewSubscribeHandler(ytclienthandlers.YouTubeSubscribeOptions{
-		Logger: logger,
-	}))
-
 	mux.Handle("/api/v1/youtube/channel", ytclienthandlers.ChannelLookupHandler(nil))
 
 	mux.Handle("/api/v1/streamers", streamershandlers.NewCreateHandler(streamershandlers.CreateOptions{
