@@ -209,7 +209,6 @@ var platformPresets = []string{
 	"YouTube",
 	"Twitch",
 	"Facebook Live",
-
 }
 
 func main() {
@@ -599,7 +598,7 @@ func renderSubmitForm() {
 		if submitState.Errors.Description {
 			descClass += " form-field-error"
 		}
-		builder.WriteString(`<label class="` + descClass + `" id="field-description"><span>Description *</span><p class="submit-streamer-help">What does the streamer do and what makes their streams unique?</p><textarea id="streamer-description" rows="3">`)
+		builder.WriteString(`<label class="` + descClass + `" id="field-description"><span>Description *</span><p class="submit-streamer-help">What does the streamer do and what makes their streams unique?</p><textarea id="streamer-description" rows="3" required>`)
 		builder.WriteString(html.EscapeString(submitState.Description))
 		builder.WriteString(`</textarea></label>`)
 
@@ -651,20 +650,7 @@ func renderSubmitForm() {
 				channelWrapper += " form-field-error"
 			}
 			builder.WriteString(`<div class="platform-row" data-platform-row="` + row.ID + `">`)
-			builder.WriteString(`<label class="` + nameWrapper + `" id="platform-name-field-` + row.ID + `"><span>Platform name</span><div class="platform-picker"><select class="platform-select" data-platform-select data-row="` + row.ID + `"><option value="">Choose platform</option>`)
-			presetMatched := false
-			for _, preset := range platformPresets {
-				selected := ""
-				if strings.EqualFold(row.Name, preset) {
-					selected = " selected"
-					presetMatched = true
-				}
-				builder.WriteString(`<option value="` + html.EscapeString(preset) + `"` + selected + `>` + html.EscapeString(preset) + `</option>`)
-			}
-			if row.Name != "" && !presetMatched {
-				builder.WriteString(`<option value="` + html.EscapeString(row.Name) + `" selected>` + html.EscapeString(row.Name) + `</option>`)
-			}
-			builder.WriteString(`</select></div></label>`)
+			builder.WriteString(`<label class="` + nameWrapper + `" id="platform-name-field-` + row.ID + `"><span>Platform name</span><input type="text" data-platform-name data-row="` + row.ID + `" placeholder="e.g. YouTube" value="` + html.EscapeString(row.Name) + `" required /></label>`)
 
 			builder.WriteString(`<label class="` + channelWrapper + `" id="platform-url-field-` + row.ID + `"><span>Channel URL</span><input type="url" placeholder="https://" value="` + html.EscapeString(row.ChannelURL) + `" data-platform-channel data-row="` + row.ID + `" required /></label>`)
 
@@ -828,15 +814,14 @@ func bindSubmitFormEvents() {
 		})
 	})
 
-	platformSelects := document.Call("querySelectorAll", "[data-platform-select]")
-	forEachNode(platformSelects, func(node js.Value) {
-		addFormHandler(node, "change", func(this js.Value, _ []js.Value) any {
+	platformNameInputs := document.Call("querySelectorAll", "[data-platform-name]")
+	forEachNode(platformNameInputs, func(node js.Value) {
+		addFormHandler(node, "input", func(this js.Value, _ []js.Value) any {
 			rowID := this.Get("dataset").Get("row").String()
 			value := this.Get("value").String()
 			for index, row := range submitState.Platforms {
 				if row.ID == rowID {
 					submitState.Platforms[index].Name = value
-					submitState.Platforms[index].Preset = value
 					if strings.TrimSpace(value) != "" {
 						clearPlatformError(rowID, "name")
 					}
