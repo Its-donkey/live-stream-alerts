@@ -630,8 +630,9 @@ func renderSubmitForm() {
 		if len(submitState.Languages) == 0 {
 			builder.WriteString(`<span class="language-empty">No languages selected yet.</span>`)
 		} else {
-			for _, language := range submitState.Languages {
-				builder.WriteString(`<span class="language-pill">` + html.EscapeString(language) + `<button type="button" data-remove-language="` + html.EscapeString(language) + `" aria-label="Remove ` + html.EscapeString(language) + `">×</button></span>`)
+			for _, value := range submitState.Languages {
+				label := displayLanguage(value)
+				builder.WriteString(`<span class="language-pill">` + html.EscapeString(label) + `<button type="button" data-remove-language="` + html.EscapeString(value) + `" aria-label="Remove ` + html.EscapeString(label) + `">×</button></span>`)
 			}
 		}
 		builder.WriteString(`</div>`)
@@ -802,12 +803,8 @@ func bindSubmitFormEvents() {
 		if len(submitState.Languages) >= maxLanguages {
 			return nil
 		}
-		label := languageLabelByValue[value]
-		if label == "" {
-			label = value
-		}
-		if !containsString(submitState.Languages, label) {
-			submitState.Languages = append(submitState.Languages, label)
+		if !containsString(submitState.Languages, value) {
+			submitState.Languages = append(submitState.Languages, value)
 			submitState.Errors.Languages = false
 		}
 		renderSubmitForm()
@@ -817,13 +814,13 @@ func bindSubmitFormEvents() {
 	langButtons := document.Call("querySelectorAll", "[data-remove-language]")
 	forEachNode(langButtons, func(node js.Value) {
 		addFormHandler(node, "click", func(this js.Value, _ []js.Value) any {
-			language := this.Get("dataset").Get("removeLanguage").String()
-			if language == "" {
+			value := this.Get("dataset").Get("removeLanguage").String()
+			if value == "" {
 				return nil
 			}
 			filtered := make([]string, 0, len(submitState.Languages))
 			for _, entry := range submitState.Languages {
-				if entry != language {
+				if entry != value {
 					filtered = append(filtered, entry)
 				}
 			}
@@ -1178,8 +1175,12 @@ func newPlatformRow() platformFormRow {
 
 func availableLanguageOptions(selected []string) []languageOption {
 	options := make([]languageOption, 0, len(languageOptions))
+	selectedSet := make(map[string]struct{}, len(selected))
+	for _, value := range selected {
+		selectedSet[value] = struct{}{}
+	}
 	for _, option := range languageOptions {
-		if !containsString(selected, option.Label) {
+		if _, exists := selectedSet[option.Value]; !exists {
 			options = append(options, option)
 		}
 	}
@@ -1202,3 +1203,10 @@ var languageLabelByValue = func() map[string]string {
 	}
 	return values
 }()
+
+func displayLanguage(value string) string {
+	if label := languageLabelByValue[value]; label != "" {
+		return label
+	}
+	return value
+}
