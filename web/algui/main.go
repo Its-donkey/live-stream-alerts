@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -65,22 +66,40 @@ type submitFormState struct {
 	Submitting    bool
 }
 
-type submissionPayload struct {
-	Name        string               `json:"name"`
-	Description string               `json:"description"`
-	Status      string               `json:"status"`
-	StatusLabel string               `json:"statusLabel"`
-	Languages   []string             `json:"languages"`
-	Platforms   []submissionPlatform `json:"platforms"`
+type createStreamerRequest struct {
+	Streamer  streamerPayload   `json:"streamer"`
+	Platforms streamerPlatforms `json:"platforms"`
 }
 
-type submissionPlatform struct {
-	Name       string `json:"name"`
-	ChannelURL string `json:"channelUrl"`
+type streamerPayload struct {
+	Alias       string `json:"alias"`
+	Description string `json:"description,omitempty"`
 }
 
-type submissionResponse struct {
-	Message string `json:"message"`
+type streamerPlatforms struct {
+	YouTube  *platformYouTube  `json:"youtube,omitempty"`
+	Facebook *platformFacebook `json:"facebook,omitempty"`
+	Twitch   *platformTwitch   `json:"twitch,omitempty"`
+}
+
+type platformYouTube struct {
+	Handle    string `json:"handle"`
+	ChannelID string `json:"channelId,omitempty"`
+}
+
+type platformFacebook struct {
+	PageID string `json:"pageId,omitempty"`
+}
+
+type platformTwitch struct {
+	Username string `json:"username,omitempty"`
+}
+
+type createStreamerResponse struct {
+	Streamer struct {
+		ID    string `json:"id"`
+		Alias string `json:"alias"`
+	} `json:"streamer"`
 }
 
 var (
@@ -92,9 +111,8 @@ var (
 )
 
 const (
-	defaultSubmitStatus = "offline"
-	maxLanguages        = 8
-	maxPlatforms        = 8
+	maxLanguages = 8
+	maxPlatforms = 8
 )
 
 var statusLabels = map[string]string{
@@ -982,13 +1000,14 @@ func handleSubmit() {
 		return
 	}
 
-	payload := submissionPayload{
-		Name:        strings.TrimSpace(submitState.Name),
-		Description: strings.TrimSpace(submitState.Description),
-		Status:      defaultSubmitStatus,
-		StatusLabel: statusLabels[defaultSubmitStatus],
-		Languages:   append([]string(nil), submitState.Languages...),
-		Platforms:   sanitizePlatforms(submitState.Platforms),
+	trimmedName := strings.TrimSpace(submitState.Name)
+	trimmedDescription := strings.TrimSpace(submitState.Description)
+	description := buildStreamerDescription(trimmedDescription, submitState.Languages, submitState.Platforms)
+	payload := createStreamerRequest{
+		Streamer: streamerPayload{
+			Alias:       trimmedName,
+			Description: description,
+		},
 	}
 
 	submitState.Submitting = true
@@ -1048,32 +1067,13 @@ func validateSubmission() bool {
 	return !(errors.Name || errors.Description || errors.Languages || len(errors.Platforms) > 0)
 }
 
-func sanitizePlatforms(rows []platformFormRow) []submissionPlatform {
-	result := make([]submissionPlatform, 0, len(rows))
-	for _, row := range rows {
-		name := strings.TrimSpace(row.Name)
-		channel := strings.TrimSpace(row.ChannelURL)
-		if name == "" || channel == "" {
-			continue
-		}
-		result = append(result, submissionPlatform{
-			Name:       name,
-			ChannelURL: channel,
-		})
-		if len(result) >= maxPlatforms {
-			break
-		}
-	}
-	return result
-}
-
-func submitStreamerRequest(ctx context.Context, payload submissionPayload) (string, error) {
+func submitStreamerRequest(ctx context.Context, payload createStreamerRequest) (string, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/api/submit-streamer", bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/streamers", bytes.NewReader(data))
 	if err != nil {
 		return "", err
 	}
@@ -1092,18 +1092,57 @@ func submitStreamerRequest(ctx context.Context, payload submissionPayload) (stri
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var failure submissionResponse
-		if err := json.Unmarshal(body, &failure); err == nil && failure.Message != "" {
-			return "", fmt.Errorf(failure.Message)
+		if trimmed := strings.TrimSpace(string(body)); trimmed != "" {
+			return "", errors.New(trimmed)
 		}
 		return "", fmt.Errorf("submission failed: %s", resp.Status)
 	}
 
-	var success submissionResponse
-	if err := json.Unmarshal(body, &success); err == nil && success.Message != "" {
-		return success.Message, nil
+	var created createStreamerResponse
+	if err := json.Unmarshal(body, &created); err != nil {
+		return "Streamer submitted successfully.", nil
 	}
-	return "Submission received and queued for review.", nil
+	alias := strings.TrimSpace(created.Streamer.Alias)
+	id := strings.TrimSpace(created.Streamer.ID)
+	switch {
+	case alias != "" && id != "":
+		return fmt.Sprintf("%s added with ID %s.", alias, id), nil
+	case alias != "":
+		return fmt.Sprintf("%s added to the roster.", alias), nil
+	default:
+		return "Streamer submitted successfully.", nil
+	}
+}
+
+func buildStreamerDescription(description string, languages []string, platforms []platformFormRow) string {
+	var sections []string
+	if description != "" {
+		sections = append(sections, description)
+	}
+	if len(languages) > 0 {
+		sections = append(sections, "Languages: "+strings.Join(languages, ", "))
+	}
+	if platformSummary := formatPlatformSummary(platforms); platformSummary != "" {
+		sections = append(sections, "Platforms: "+platformSummary)
+	}
+	return strings.Join(sections, "\n\n")
+}
+
+func formatPlatformSummary(platforms []platformFormRow) string {
+	var parts []string
+	for _, row := range platforms {
+		name := strings.TrimSpace(row.Name)
+		url := strings.TrimSpace(row.ChannelURL)
+		switch {
+		case name != "" && url != "":
+			parts = append(parts, fmt.Sprintf("%s (%s)", name, url))
+		case name != "":
+			parts = append(parts, name)
+		case url != "":
+			parts = append(parts, url)
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 func clearFormFields() {
