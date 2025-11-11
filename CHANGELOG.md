@@ -13,6 +13,7 @@
 - Derived `streamer.id` from the alias by stripping whitespace/punctuation and tightened the schema to enforce alphanumeric IDs.
 - Reject duplicate streamer aliases by enforcing unique cleaned IDs during persistence and documenting the resulting `409 Conflict` behavior.
 - The alGUI Submit Streamer form now POSTs directly to `/api/v1/streamers`, surfacing conflicts when an alias already exists.
+- Added `streamer.languages` to the schema/storage plus validation so submissions only include supported language codes.
 - Added `web/README.md` so contributors know how to build and serve the alGUI assets.
 - Added a JSON schema (`schema/streamers.schema.json`) and typed storage layer for streamers so data persists with server-managed IDs and timestamps.
 - Stubbed platform folders (`internal/platforms/{youtube,facebook,twitch}`) plus shared logging utilities to support future providers.

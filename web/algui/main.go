@@ -72,8 +72,9 @@ type createStreamerRequest struct {
 }
 
 type streamerPayload struct {
-	Alias       string `json:"alias"`
-	Description string `json:"description,omitempty"`
+	Alias       string   `json:"alias"`
+	Description string   `json:"description,omitempty"`
+	Languages   []string `json:"languages,omitempty"`
 }
 
 type streamerPlatforms struct {
@@ -1007,6 +1008,7 @@ func handleSubmit() {
 		Streamer: streamerPayload{
 			Alias:       trimmedName,
 			Description: description,
+			Languages:   append([]string(nil), submitState.Languages...),
 		},
 	}
 

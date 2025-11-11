@@ -115,6 +115,12 @@ func validateRecord(record *streamers.Record) error {
 		record.Streamer.ID = sanitized
 	}
 
+	languages, err := sanitizeLanguages(record.Streamer.Languages)
+	if err != nil {
+		return err
+	}
+	record.Streamer.Languages = languages
+
 	if record.Platforms.YouTube != nil {
 		record.Platforms.YouTube.Handle = strings.TrimSpace(record.Platforms.YouTube.Handle)
 		if record.Platforms.YouTube.Handle == "" {
@@ -133,3 +139,113 @@ func sanitizeAliasForID(alias string) string {
 	}
 	return builder.String()
 }
+
+func sanitizeLanguages(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	seen := make(map[string]struct{}, len(values))
+	clean := make([]string, 0, len(values))
+
+	for _, raw := range values {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			return nil, fmt.Errorf("streamer.languages contains an empty entry")
+		}
+		if _, ok := allowedLanguagesSet[trimmed]; !ok {
+			return nil, fmt.Errorf("streamer.languages contains unsupported value %q", trimmed)
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		clean = append(clean, trimmed)
+	}
+	return clean, nil
+}
+
+var allowedLanguagesSet = func() map[string]struct{} {
+	values := []string{
+		"English",
+		"Afrikaans",
+		"Albanian",
+		"Amharic",
+		"Armenian",
+		"Azerbaijani",
+		"Basque",
+		"Belarusian",
+		"Bosnian",
+		"Bulgarian",
+		"Catalan",
+		"Cebuano",
+		"Croatian",
+		"Czech",
+		"Danish",
+		"Dutch",
+		"Estonian",
+		"Filipino",
+		"Finnish",
+		"Galician",
+		"Georgian",
+		"German",
+		"Greek",
+		"Gujarati",
+		"Haitian Creole",
+		"Hebrew",
+		"Hmong",
+		"Hungarian",
+		"Icelandic",
+		"Igbo",
+		"Italian",
+		"Japanese",
+		"Javanese",
+		"Kannada",
+		"Kazakh",
+		"Khmer",
+		"Kinyarwanda",
+		"Korean",
+		"Kurdish",
+		"Lao",
+		"Latvian",
+		"Lithuanian",
+		"Luxembourgish",
+		"Macedonian",
+		"Malay",
+		"Malayalam",
+		"Maltese",
+		"Marathi",
+		"Mongolian",
+		"Nepali",
+		"Norwegian",
+		"Pashto",
+		"Persian",
+		"Polish",
+		"Punjabi",
+		"Romanian",
+		"Serbian",
+		"Sinhala",
+		"Slovak",
+		"Slovenian",
+		"Somali",
+		"Swahili",
+		"Swedish",
+		"Tamil",
+		"Telugu",
+		"Thai",
+		"Turkish",
+		"Ukrainian",
+		"Urdu",
+		"Uzbek",
+		"Vietnamese",
+		"Welsh",
+		"Xhosa",
+		"Yoruba",
+		"Zulu",
+	}
+	set := make(map[string]struct{}, len(values))
+	for _, v := range values {
+		set[v] = struct{}{}
+	}
+	return set
+}()
