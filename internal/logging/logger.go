@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sync"
 )
 
 // Logger represents the minimal logging interface used across the project.
@@ -21,25 +22,24 @@ type stdLogger struct {
 	base *log.Logger
 }
 
+type newlineWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
 // New returns a Logger that writes to stdout using Go's default date/time flags.
 func New() Logger {
 	return NewWithWriter(os.Stdout)
 }
 
-// NewWithWriter builds a Logger that writes to the provided io.Writer.
+// NewWithWriter builds a Logger that writes to the provided io.Writer and
+// ensures there is always a blank line before each timestamped entry.
 func NewWithWriter(w io.Writer) Logger {
 	if w == nil {
 		w = os.Stdout
 	}
-	return &stdLogger{base: log.New(w, "", log.LstdFlags)}
-}
-
-// FromStd wraps an existing *log.Logger in the Logger interface.
-func FromStd(base *log.Logger) Logger {
-	if base == nil {
-		return New()
-	}
-	return &stdLogger{base: base}
+	adapter := &newlineWriter{w: w}
+	return &stdLogger{base: log.New(adapter, "", log.LstdFlags)}
 }
 
 // AsStdLogger returns the underlying *log.Logger when available so packages
@@ -50,6 +50,9 @@ func AsStdLogger(logger Logger) *log.Logger {
 	}
 	if provider, ok := logger.(stdLoggerProvider); ok {
 		return provider.StdLogger()
+	}
+	if std, ok := logger.(*stdLogger); ok {
+		return std.base
 	}
 	return nil
 }
@@ -66,4 +69,24 @@ func (l *stdLogger) StdLogger() *log.Logger {
 		return nil
 	}
 	return l.base
+}
+
+func (w *newlineWriter) Write(p []byte) (int, error) {
+	if w == nil || w.w == nil {
+		return len(p), nil
+	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if _, err := w.w.Write([]byte("\n")); err != nil {
+		return 0, err
+	}
+	if len(p) == 0 {
+		return 0, nil
+	}
+	if _, err := w.w.Write(p); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
