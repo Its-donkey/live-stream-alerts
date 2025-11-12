@@ -4,14 +4,19 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-)
 
-import "live-stream-alerts/internal/logging"
+	"live-stream-alerts/internal/logging"
+)
 
 // HandleVerification handles YouTube PubSubHubbub GET verification requests.
 // It returns true when the request has been handled (regardless of success).
 func SubscriptionConfirmation(w http.ResponseWriter, r *http.Request, logger logging.Logger) bool {
-	if r.Method != http.MethodGet || r.URL.Path != "/alerts" {
+	if r.Method != http.MethodGet {
+		return false
+	}
+	switch r.URL.Path {
+	case "/alerts", "/alert":
+	default:
 		return false
 	}
 
@@ -37,9 +42,9 @@ func SubscriptionConfirmation(w http.ResponseWriter, r *http.Request, logger log
 	w.Header().Set("Content-Length", strconv.Itoa(len(challenge)))
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, challenge)
+
 	if logger != nil {
 		logger.Printf("Hub challenge reply sent with status=200 body=%q", challenge)
 	}
-
 	return true
 }
