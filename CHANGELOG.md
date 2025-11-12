@@ -16,7 +16,6 @@
 - Added `streamer.languages` to the schema/storage plus validation so submissions only include supported language codes.
 - Added `/api/v1/metadata/description` so the UI can fetch channel summaries and auto-fill the description/name/YouTube handle fields when a URL is entered.
 - Automatically subscribes YouTube channels (via PubSubHubbub) whenever a newly created streamer includes YouTube platform data, resolving channel IDs from handles when needed.
-- Added a reusable YouTube subscriber helper plus `cmd/resubscribe` so existing records can be re-registered with the hub (and secrets rotated) without manual payload crafting.
 - Added `web/README.md` so contributors know how to build and serve the alGUI assets.
 - Added a JSON schema (`schema/streamers.schema.json`) and typed storage layer for streamers so data persists with server-managed IDs and timestamps.
 - Stubbed platform folders (`internal/platforms/{youtube,facebook,twitch}`) plus shared logging utilities to support future providers.
@@ -27,6 +26,7 @@
 - Normalized all YouTube WebSub defaults (callback URL, lease duration, verification mode) inside the handler so clients can omit them safely.
 - Alert verification logging now includes the exact challenge response body so the terminal reflects what was sent back to YouTube.
 - Accepts `/alert` as an alias for `/alerts` so PubSubHubBub callbacks from older reverse-proxy configs are handled correctly.
+- Fixed the router and verification handler so both `/alert` and `/alerts` paths are actually registered, preventing 404s when Google hits the legacy plural route.
 - Consolidated all logging through the internal logger package so runtime output shares consistent formatting regardless of entry point, including a blank spacer line before every timestamped entry for readability.
 - Added explicit logging after sending the hub challenge reply so the status/body echoed back to YouTube are captured.
 ### Fixed

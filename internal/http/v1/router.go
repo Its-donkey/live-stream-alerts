@@ -32,10 +32,10 @@ func New(opts Options) http.Handler {
 	logger := opts.Logger
 
 	handleAlertVerification := func(w http.ResponseWriter, r *http.Request) {
-		ytclienthandlers.SubscriptionConfirmation(w, r, logger)
+		ytclienthandlers.YouTubeSubscriptionConfirmation(w, r, logger)
 	}
-	mux.HandleFunc("/alerts", handleAlertVerification)
 	mux.HandleFunc("/alert", handleAlertVerification)
+	mux.HandleFunc("/alerts", handleAlertVerification)
 
 	mux.Handle("/api/v1/youtube/subscribe", ytclienthandlers.NewSubscribeHandler(ytclienthandlers.YouTubeSubscribeOptions{
 		Logger: logger,
