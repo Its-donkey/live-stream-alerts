@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"live-stream-alerts/internal/logging"
+	"live-stream-alerts/internal/platforms/youtube/websub"
 )
 
 // HandleVerification handles YouTube PubSubHubbub GET verification requests.
@@ -26,6 +27,44 @@ func YouTubeSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, log
 	challenge := query.Get("hub.challenge")
 	if challenge == "" {
 		http.Error(w, "missing hub.challenge", http.StatusBadRequest)
+		return true
+	}
+	verifyToken := strings.TrimSpace(query.Get("hub.verify_token"))
+	if verifyToken == "" {
+		http.Error(w, "missing hub.verify_token", http.StatusBadRequest)
+		return true
+	}
+
+	exp, ok := websub.LookupExpectation(verifyToken)
+	if !ok {
+		http.Error(w, "unknown verification token", http.StatusBadRequest)
+		return true
+	}
+
+	topic := strings.TrimSpace(query.Get("hub.topic"))
+	if exp.Topic != "" && topic != exp.Topic {
+		http.Error(w, "hub.topic mismatch", http.StatusBadRequest)
+		return true
+	}
+
+	leaseParam := strings.TrimSpace(query.Get("hub.lease_seconds"))
+	leaseValue := 0
+	if leaseParam != "" {
+		parsedLease, err := strconv.Atoi(leaseParam)
+		if err != nil {
+			http.Error(w, "invalid hub.lease_seconds", http.StatusBadRequest)
+			return true
+		}
+		leaseValue = parsedLease
+	}
+	if exp.LeaseSeconds > 0 && leaseValue != exp.LeaseSeconds {
+		http.Error(w, "hub.lease_seconds mismatch", http.StatusBadRequest)
+		return true
+	}
+
+	mode := strings.TrimSpace(query.Get("hub.mode"))
+	if exp.Mode != "" && !strings.EqualFold(mode, exp.Mode) {
+		http.Error(w, "hub.mode mismatch", http.StatusBadRequest)
 		return true
 	}
 
@@ -64,6 +103,7 @@ func YouTubeSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, log
 		logger.Printf("Planned hub response:\n%s", responseDump.String())
 	}
 
+	websub.ConsumeExpectation(verifyToken)
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, challenge)
 
