@@ -4,13 +4,13 @@ package server
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"strings"
 	"time"
 
+	"live-stream-alerts/internal/logging"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
 )
 
@@ -23,7 +23,7 @@ type Config struct {
 	Addr        string
 	Port        string
 	ReadTimeout time.Duration
-	Logger      *log.Logger
+	Logger      logging.Logger
 	Handler     http.Handler
 }
 
@@ -35,7 +35,7 @@ type Server struct {
 
 func (c Config) New() (*Server, error) {
 	if c.Logger == nil {
-		c.Logger = log.Default()
+		c.Logger = logging.New()
 	}
 	if c.Addr == "" {
 		c.Addr = defaultAddr
@@ -54,7 +54,7 @@ func (c Config) New() (*Server, error) {
 	s.httpServer = &http.Server{
 		ReadHeaderTimeout: c.ReadTimeout,
 		Handler:           handler,
-		ErrorLog:          c.Logger,
+		ErrorLog:          logging.AsStdLogger(c.Logger),
 	}
 	return s, nil
 }
@@ -97,7 +97,7 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		s.Logger.Printf("\n---- Incoming request from %s ----\n%s\n", r.RemoteAddr, dump)
 	}
 
-	if youtubehandlers.SubscriptionConfirmation(w, r, s.Logger) {
+	if youtubehandlers.YouTubeSubscriptionConfirmation(w, r, s.Logger) {
 		return
 	}
 

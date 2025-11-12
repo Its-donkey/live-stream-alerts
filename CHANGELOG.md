@@ -26,6 +26,7 @@
 - Normalized all YouTube WebSub defaults (callback URL, lease duration, verification mode) inside the handler so clients can omit them safely.
 - Alert verification logging now includes the exact challenge response body so the terminal reflects what was sent back to YouTube.
 - Accepts `/alert` as an alias for `/alerts` so PubSubHubBub callbacks from older reverse-proxy configs are handled correctly.
+- Consolidated all logging through the internal logger package so runtime output shares consistent formatting regardless of entry point.
 - Added explicit logging after sending the hub challenge reply so the status/body echoed back to YouTube are captured.
 ### Fixed
 - Persist `streamer.alias` when creating records and require it as the primary identifier so requests without names no longer lose the alias field.

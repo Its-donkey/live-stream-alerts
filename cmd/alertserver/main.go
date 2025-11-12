@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"log"
 	"mime"
 	"os"
 	"os/signal"
@@ -14,13 +13,14 @@ import (
 	"time"
 
 	httpv1 "live-stream-alerts/internal/http/v1"
+	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/server"
 )
 
 func main() {
 	_ = mime.AddExtensionType(".wasm", "application/wasm")
 
-	logger := log.Default()
+	logger := logging.New()
 	const (
 		addr = "127.0.0.1"
 		port = ":8880"
@@ -47,7 +47,8 @@ func main() {
 	}
 	srv, err := s.New()
 	if err != nil {
-		log.Fatalf("Failed to build server: %v", err)
+		logger.Printf("Failed to build server: %v", err)
+		os.Exit(1)
 	}
 
 	// Run server in background
@@ -60,7 +61,7 @@ func main() {
 
 	select {
 	case <-ctx.Done():
-		s.Logger.Println("Shutting down...")
+		s.Logger.Printf("Shutting down...")
 		_ = srv.Close()
 	case err := <-errCh:
 		if err != nil {
@@ -70,7 +71,7 @@ func main() {
 	}
 }
 
-func initStaticFS(logger *log.Logger) fs.FS {
+func initStaticFS(logger logging.Logger) fs.FS {
 	const rel = "web/algui"
 
 	if dir := os.Getenv("ALGUI_STATIC_DIR"); dir != "" {
