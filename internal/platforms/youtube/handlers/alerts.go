@@ -3,7 +3,9 @@ package handlers
 import (
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"strconv"
+	"strings"
 
 	"live-stream-alerts/internal/logging"
 )
@@ -36,10 +38,32 @@ func YouTubeSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, log
 			query.Get("hub.verify_token"),
 			challenge,
 		)
+		if dump, err := httputil.DumpRequest(r, true); err == nil {
+			logger.Printf("Raw verification request:\n%s", dump)
+		} else {
+			logger.Printf("Failed to dump verification request: %v", err)
+		}
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Content-Length", strconv.Itoa(len(challenge)))
+
+	if logger != nil {
+		var responseDump strings.Builder
+		responseDump.WriteString("HTTP/1.1 200 OK\r\n")
+		for name, values := range w.Header() {
+			for _, value := range values {
+				responseDump.WriteString(name)
+				responseDump.WriteString(": ")
+				responseDump.WriteString(value)
+				responseDump.WriteString("\r\n")
+			}
+		}
+		responseDump.WriteString("\r\n")
+		responseDump.WriteString(challenge)
+		logger.Printf("Planned hub response:\n%s", responseDump.String())
+	}
+
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, challenge)
 

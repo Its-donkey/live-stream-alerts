@@ -27,6 +27,7 @@
 - Alert verification logging now includes the exact challenge response body so the terminal reflects what was sent back to YouTube.
 - Accepts `/alert` as an alias for `/alerts` so PubSubHubBub callbacks from older reverse-proxy configs are handled correctly.
 - Fixed the router and verification handler so both `/alert` and `/alerts` paths are actually registered, preventing 404s when Google hits the legacy plural route.
+- Expanded YouTube hub verification logging to include the full HTTP dump and planned response so challenges can be reviewed before they’re sent.
 - Consolidated all logging through the internal logger package so runtime output shares consistent formatting regardless of entry point, including a blank spacer line before every timestamped entry for readability.
 - Added explicit logging after sending the hub challenge reply so the status/body echoed back to YouTube are captured.
 ### Fixed
