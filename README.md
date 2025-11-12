@@ -129,6 +129,13 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
 ### Static asset hosting
 - Requests to `/` fall back to the WebAssembly UI served from `web/algui`. When the assets are missing, the server responds with `200 OK` and the message `"alGUI assets not configured"`.
 
+### Resubscribing existing YouTube channels
+- When secrets change or legacy records need to be re-registered with the hub, run:
+  ```bash
+  go run ./cmd/resubscribe -path data/streamers.json
+  ```
+- Use `-alias <alias-or-id>` to target a single streamer (case-insensitive), `-hub-url` to override the default hub endpoint, and `-timeout` to control per-request timeouts.
+
 ## Keeping this document current
 Whenever you introduce or modify an endpoint:
 1. Update `internal/http/v1/router.go` (or the relevant router) as usual.
