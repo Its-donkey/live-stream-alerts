@@ -59,9 +59,10 @@ func Subscribe(ctx context.Context, record streamers.Record, opts Options) error
 
 	topic := fmt.Sprintf("https://www.youtube.com/xml/feeds/videos.xml?channel_id=%s", channelID)
 	subscribeReq := youtubeclient.YouTubeRequest{
-		Topic:  topic,
-		Secret: secret,
-		Verify: "async",
+		Topic:     topic,
+		Secret:    secret,
+		Verify:    "async",
+		ChannelID: channelID,
 	}
 	youtubeclient.NormaliseSubscribeRequest(&subscribeReq)
 

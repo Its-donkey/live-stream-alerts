@@ -97,7 +97,9 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		s.Logger.Printf("\n---- Incoming request from %s ----\n%s\n", r.RemoteAddr, dump)
 	}
 
-	if youtubehandlers.YouTubeSubscriptionConfirmation(w, r, s.Logger) {
+	if youtubehandlers.YouTubeSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
+		Logger: s.Logger,
+	}) {
 		return
 	}
 

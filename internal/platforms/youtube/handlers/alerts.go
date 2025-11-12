@@ -6,14 +6,23 @@ import (
 	"net/http/httputil"
 	"strconv"
 	"strings"
+	"time"
 
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/websub"
+	"live-stream-alerts/internal/streamers"
 )
+
+// SubscriptionConfirmationOptions configures how hub verification requests are handled.
+type SubscriptionConfirmationOptions struct {
+	Logger        logging.Logger
+	StreamersPath string
+}
 
 // HandleVerification handles YouTube PubSubHubbub GET verification requests.
 // It returns true when the request has been handled (regardless of success).
-func YouTubeSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, logger logging.Logger) bool {
+func YouTubeSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, opts SubscriptionConfirmationOptions) bool {
+	logger := opts.Logger
 	if r.Method != http.MethodGet {
 		return false
 	}
@@ -101,6 +110,17 @@ func YouTubeSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, log
 		responseDump.WriteString("\r\n")
 		responseDump.WriteString(challenge)
 		logger.Printf("Planned hub response:\n%s", responseDump.String())
+	}
+
+	verifiedAt := time.Now().UTC()
+	channelID := exp.ChannelID
+	if channelID == "" {
+		channelID = websub.ExtractChannelID(topic)
+	}
+	if channelID != "" {
+		if err := streamers.UpdateYouTubeLease(opts.StreamersPath, channelID, verifiedAt); err != nil && logger != nil {
+			logger.Printf("failed to record hub lease for %s: %v", channelID, err)
+		}
 	}
 
 	websub.ConsumeExpectation(verifyToken)

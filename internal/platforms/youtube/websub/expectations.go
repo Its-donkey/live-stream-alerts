@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"sync"
 	"time"
 )
@@ -14,6 +15,7 @@ type Expectation struct {
 	VerifyToken  string
 	LeaseSeconds int
 	Secret       string
+	ChannelID    string
 }
 
 var (
@@ -60,4 +62,16 @@ func CancelExpectation(token string) {
 	mu.Lock()
 	delete(expectations, token)
 	mu.Unlock()
+}
+
+// ExtractChannelID parses the channel ID from a YouTube topic URL.
+func ExtractChannelID(topic string) string {
+	if topic == "" {
+		return ""
+	}
+	u, err := url.Parse(topic)
+	if err != nil {
+		return ""
+	}
+	return u.Query().Get("channel_id")
 }

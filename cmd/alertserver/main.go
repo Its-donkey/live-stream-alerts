@@ -28,8 +28,9 @@ func main() {
 	var readWindow = 10 * time.Second
 
 	serverHandler := httpv1.New(httpv1.Options{
-		Logger:   logger,
-		StaticFS: initStaticFS(logger),
+		Logger:        logger,
+		StaticFS:      initStaticFS(logger),
+		StreamersPath: "data/streamers.json",
 		RuntimeInfo: httpv1.RuntimeInfo{
 			Name:        "alGUI",
 			Addr:        addr,

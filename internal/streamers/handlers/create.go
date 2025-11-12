@@ -12,7 +12,7 @@ import (
 	"unicode"
 
 	"live-stream-alerts/internal/logging"
-	youtubesubscriber "live-stream-alerts/internal/platforms/youtube/subscriber"
+	youtubeclient "live-stream-alerts/internal/platforms/youtube/client"
 	"live-stream-alerts/internal/streamers"
 )
 
@@ -34,17 +34,22 @@ func NewCreateHandler(opts CreateOptions) http.Handler {
 	}
 	path = filepath.Clean(path)
 
+	youtubeClient := opts.YouTubeClient
+	if youtubeClient == nil {
+		youtubeClient = &http.Client{Timeout: 10 * time.Second}
+	}
+	youtubeHubURL := strings.TrimSpace(opts.YouTubeHubURL)
+	if youtubeHubURL == "" {
+		youtubeHubURL = youtubeclient.DefaultHubURL
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			listStreamers(w, path, opts.Logger)
 			return
 		case http.MethodPost:
-			createStreamer(w, r, path, opts.Logger, youtubesubscriber.Options{
-				Client: opts.YouTubeClient,
-				HubURL: opts.YouTubeHubURL,
-				Logger: opts.Logger,
-			})
+			createStreamer(w, r, path, opts.Logger, youtubeClient, youtubeHubURL)
 			return
 		default:
 			w.Header().Set("Allow", fmt.Sprintf("%s, %s", http.MethodGet, http.MethodPost))
@@ -75,7 +80,7 @@ func listStreamers(w http.ResponseWriter, path string, logger logging.Logger) {
 	}
 }
 
-func createStreamer(w http.ResponseWriter, r *http.Request, path string, logger logging.Logger, subscriberOpts youtubesubscriber.Options) {
+func createStreamer(w http.ResponseWriter, r *http.Request, path string, logger logging.Logger, youtubeClient *http.Client, youtubeHubURL string) {
 	defer r.Body.Close()
 	var req streamers.Record
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -110,8 +115,7 @@ func createStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	subscriberOpts.Logger = logger
-	if err := youtubesubscriber.Subscribe(ctx, record, subscriberOpts); err != nil && logger != nil {
+	if err := subscribeToYouTubeAlerts(ctx, youtubeClient, youtubeHubURL, record); err != nil && logger != nil {
 		logger.Printf("failed to subscribe YouTube alerts for %s: %v", record.Streamer.Alias, err)
 	}
 }
@@ -178,6 +182,49 @@ func sanitiseLanguages(values []string) ([]string, error) {
 		clean = append(clean, trimmed)
 	}
 	return clean, nil
+}
+
+func subscribeToYouTubeAlerts(ctx context.Context, client *http.Client, hubURL string, record streamers.Record) error {
+	if record.Platforms.YouTube == nil {
+		return nil
+	}
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+	yt := record.Platforms.YouTube
+	channelID := strings.TrimSpace(yt.ChannelID)
+	handle := strings.TrimSpace(yt.Handle)
+
+	if channelID == "" && handle != "" {
+		resolvedID, err := youtubeclient.ResolveChannelID(ctx, handle, client)
+		if err != nil {
+			return fmt.Errorf("resolve channel ID for handle %s: %w", handle, err)
+		}
+		channelID = resolvedID
+	}
+	if channelID == "" {
+		return fmt.Errorf("youtube channel ID missing; cannot subscribe")
+	}
+
+	topic := fmt.Sprintf("https://www.youtube.com/xml/feeds/videos.xml?channel_id=%s", channelID)
+	subscribeReq := youtubeclient.YouTubeRequest{
+		Topic:     topic,
+		Secret:    strings.TrimSpace(yt.HubSecret),
+		Verify:    "async",
+		ChannelID: channelID,
+	}
+	youtubeclient.NormaliseSubscribeRequest(&subscribeReq)
+
+	hubURL = strings.TrimSpace(hubURL)
+	if hubURL == "" {
+		hubURL = youtubeclient.DefaultHubURL
+	}
+
+	_, _, err := youtubeclient.SubscribeYouTube(ctx, client, hubURL, subscribeReq)
+	if err != nil {
+		return fmt.Errorf("subscribe youtube alerts: %w", err)
+	}
+	return nil
 }
 
 var allowedLanguagesSet = func() map[string]struct{} {

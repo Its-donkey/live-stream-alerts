@@ -30,6 +30,7 @@ type YouTubeRequest struct {
 	VerifyToken  string
 	Secret       string
 	LeaseSeconds int
+	ChannelID    string
 }
 
 // NormaliseSubscribeRequest applies the enforced defaults required by the system.
@@ -77,12 +78,18 @@ func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req Y
 		req.VerifyToken = websub.GenerateVerifyToken()
 	}
 
+	channelID := strings.TrimSpace(req.ChannelID)
+	if channelID == "" {
+		channelID = websub.ExtractChannelID(req.Topic)
+	}
+
 	websub.RegisterExpectation(websub.Expectation{
 		Mode:         mode,
 		Topic:        req.Topic,
 		VerifyToken:  req.VerifyToken,
 		LeaseSeconds: req.LeaseSeconds,
 		Secret:       req.Secret,
+		ChannelID:    channelID,
 	})
 	registeredToken := req.VerifyToken
 	subscriptionAccepted := false

@@ -22,17 +22,22 @@ type RuntimeInfo struct {
 
 // Options configures the HTTP router.
 type Options struct {
-	Logger      logging.Logger
-	StaticFS    fs.FS
-	RuntimeInfo RuntimeInfo
+	Logger        logging.Logger
+	StaticFS      fs.FS
+	RuntimeInfo   RuntimeInfo
+	StreamersPath string
 }
 
 func New(opts Options) http.Handler {
 	mux := http.NewServeMux()
 	logger := opts.Logger
+	streamersPath := opts.StreamersPath
 
 	handleAlertVerification := func(w http.ResponseWriter, r *http.Request) {
-		ytclienthandlers.YouTubeSubscriptionConfirmation(w, r, logger)
+		ytclienthandlers.YouTubeSubscriptionConfirmation(w, r, ytclienthandlers.SubscriptionConfirmationOptions{
+			Logger:        logger,
+			StreamersPath: streamersPath,
+		})
 	}
 	mux.HandleFunc("/alert", handleAlertVerification)
 	mux.HandleFunc("/alerts", handleAlertVerification)
@@ -44,7 +49,8 @@ func New(opts Options) http.Handler {
 	mux.Handle("/api/v1/youtube/channel", ytclienthandlers.ChannelLookupHandler(nil))
 
 	mux.Handle("/api/v1/streamers", streamershandlers.NewCreateHandler(streamershandlers.CreateOptions{
-		Logger: logger,
+		Logger:   logger,
+		FilePath: streamersPath,
 	}))
 
 	mux.Handle("/api/v1/metadata/description", metadatahandlers.DescriptionHandler(metadatahandlers.DescriptionHandlerOptions{}))
