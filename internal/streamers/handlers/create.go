@@ -12,7 +12,7 @@ import (
 	"unicode"
 
 	"live-stream-alerts/internal/logging"
-	youtubeclient "live-stream-alerts/internal/platforms/youtube/client"
+	youtubesubscriptions "live-stream-alerts/internal/platforms/youtube/subscriptions"
 	"live-stream-alerts/internal/streamers"
 )
 
@@ -39,9 +39,6 @@ func NewCreateHandler(opts CreateOptions) http.Handler {
 		youtubeClient = &http.Client{Timeout: 10 * time.Second}
 	}
 	youtubeHubURL := strings.TrimSpace(opts.YouTubeHubURL)
-	if youtubeHubURL == "" {
-		youtubeHubURL = youtubeclient.DefaultHubURL
-	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -115,7 +112,12 @@ func createStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	if err := subscribeToYouTubeAlerts(ctx, youtubeClient, youtubeHubURL, record); err != nil && logger != nil {
+	subscribeOpts := youtubesubscriptions.Options{
+		Client: youtubeClient,
+		HubURL: youtubeHubURL,
+		Logger: logger,
+	}
+	if err := youtubesubscriptions.Subscribe(ctx, record, subscribeOpts); err != nil && logger != nil {
 		logger.Printf("failed to subscribe YouTube alerts for %s: %v", record.Streamer.Alias, err)
 	}
 }
@@ -182,49 +184,6 @@ func sanitiseLanguages(values []string) ([]string, error) {
 		clean = append(clean, trimmed)
 	}
 	return clean, nil
-}
-
-func subscribeToYouTubeAlerts(ctx context.Context, client *http.Client, hubURL string, record streamers.Record) error {
-	if record.Platforms.YouTube == nil {
-		return nil
-	}
-	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Second}
-	}
-	yt := record.Platforms.YouTube
-	channelID := strings.TrimSpace(yt.ChannelID)
-	handle := strings.TrimSpace(yt.Handle)
-
-	if channelID == "" && handle != "" {
-		resolvedID, err := youtubeclient.ResolveChannelID(ctx, handle, client)
-		if err != nil {
-			return fmt.Errorf("resolve channel ID for handle %s: %w", handle, err)
-		}
-		channelID = resolvedID
-	}
-	if channelID == "" {
-		return fmt.Errorf("youtube channel ID missing; cannot subscribe")
-	}
-
-	topic := fmt.Sprintf("https://www.youtube.com/xml/feeds/videos.xml?channel_id=%s", channelID)
-	subscribeReq := youtubeclient.YouTubeRequest{
-		Topic:     topic,
-		Secret:    strings.TrimSpace(yt.HubSecret),
-		Verify:    "async",
-		ChannelID: channelID,
-	}
-	youtubeclient.NormaliseSubscribeRequest(&subscribeReq)
-
-	hubURL = strings.TrimSpace(hubURL)
-	if hubURL == "" {
-		hubURL = youtubeclient.DefaultHubURL
-	}
-
-	_, _, err := youtubeclient.SubscribeYouTube(ctx, client, hubURL, subscribeReq)
-	if err != nil {
-		return fmt.Errorf("subscribe youtube alerts: %w", err)
-	}
-	return nil
 }
 
 var allowedLanguagesSet = func() map[string]struct{} {

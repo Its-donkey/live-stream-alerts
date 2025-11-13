@@ -234,6 +234,117 @@
       },
       "createdAt": "2025-11-11T13:08:25.54831Z",
       "updatedAt": "2025-11-11T13:08:25.54831Z"
+    },
+    {
+      "streamer": {
+        "id": "JudgeJeffreyMiddleton",
+        "alias": "Judge Jeffrey Middleton",
+        "description": "Share your videos with friends, family and the world\n\nPlatforms: www.youtube.com (https://www.youtube.com/@judgejeffreymiddleton7573)",
+        "firstName": "",
+        "lastName": "",
+        "email": "",
+        "languages": [
+          "English"
+        ]
+      },
+      "platforms": {
+        "youtube": {
+          "handle": "@judgejeffreymiddleton7573",
+          "channelId": "UCS8gM5S889oBPyN6K07ZC6A",
+          "hubSecret": "2ca8c546e89a44948b5cd5494dab9aaa"
+        }
+      },
+      "createdAt": "2025-11-11T13:14:07.66085Z",
+      "updatedAt": "2025-11-11T13:14:07.66085Z"
+    },
+    {
+      "streamer": {
+        "id": "SharpenRightServicesLLCMikeWhite",
+        "alias": "Sharpen Right Services LLC - Mike White",
+        "description": "Sharpen Right Services LLC - Mike White located in League City, Texas.  We are a home based, mobile and mail order sharpening service; specializing in sharpe...\n\nPlatforms: www.youtube.com (https://www.youtube.com/@sharpenrightservicesllc)",
+        "firstName": "",
+        "lastName": "",
+        "email": "",
+        "languages": [
+          "English"
+        ]
+      },
+      "platforms": {
+        "youtube": {
+          "handle": "@sharpenrightservicesllc",
+          "channelId": "UC7d6BuAfHKTLR1l2SSg6HkA",
+          "hubSecret": "2282642cdbd239fa105ed4734cee6a92"
+        }
+      },
+      "createdAt": "2025-11-11T13:23:35.241424Z",
+      "updatedAt": "2025-11-11T13:23:35.241424Z"
+    },
+    {
+      "streamer": {
+        "id": "iSharpen",
+        "alias": "iSharpen",
+        "description": "I'm Baz, I sharpen knives at Findon Precision Knife Sharpening in Adelaide, South Australia. Visit https://isharpen.shop/Contact:Mobile/Cell phone (or WhatsA...\n\nPlatforms: www.youtube.com (https://www.youtube.com/@iSharpen)",
+        "firstName": "",
+        "lastName": "",
+        "email": "",
+        "languages": [
+          "English"
+        ]
+      },
+      "platforms": {
+        "youtube": {
+          "handle": "@iSharpen",
+          "channelId": "UCcEn5aF0PII-DygWmsyP7sg",
+          "hubSecret": "085272d4fb9cefc115ba2f3df9f99d4b"
+        }
+      },
+      "createdAt": "2025-11-11T13:26:16.753064Z",
+      "updatedAt": "2025-11-11T13:26:16.753064Z"
+    },
+    {
+      "streamer": {
+        "id": "Ashville",
+        "alias": "Ashville",
+        "description": "Ashville are specialist in Waste Management, Recycling, Rail Freight \u0026 Construction and are based in London.One side of the business imports primary aggregat...",
+        "firstName": "",
+        "lastName": "",
+        "email": "",
+        "languages": [
+          "English"
+        ]
+      },
+      "platforms": {
+        "youtube": {
+          "handle": "@thisisashville",
+          "channelId": "UC-2XiVy5AbEn2TXf0f2APeQ",
+          "hubSecret": "0e2f24ee302aa85f1f7a8f9f29471084"
+        }
+      },
+      "createdAt": "2025-11-11T13:30:10.638396Z",
+      "updatedAt": "2025-11-11T13:30:10.638396Z"
+    },
+    {
+      "streamer": {
+        "id": "MooseDoesStuff",
+        "alias": "MooseDoesStuff",
+        "description": "Share your videos with friends, family and the world",
+        "firstName": "",
+        "lastName": "",
+        "email": "",
+        "languages": [
+          "English"
+        ]
+      },
+      "platforms": {
+        "youtube": {
+          "handle": "@MooseDoesStuff",
+          "channelId": "UCyWoKZ6i2hSjgjd3wE56AXQ",
+          "hubSecret": "fbe5f579e3b0c5f1c0a97e3221b5273a",
+          "hubLeaseRenewalDue": "2025-11-12T05:41:06Z"
+        }
+      },
+      "createdAt": "2025-11-12T05:41:05.717352Z",
+      "updatedAt": "2025-11-12T05:41:06.799341Z"
     }
   ]
 }

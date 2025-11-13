@@ -1,26 +1,21 @@
 # live-stream-alerts
 
-A lightweight Go service that proxies YouTube WebSub subscriptions, stores streamer metadata, and serves the alGUI WebAssembly frontend alongside operational endpoints.
+A lightweight Go service that proxies YouTube WebSub subscriptions, stores streamer metadata, and exposes operational endpoints for downstream automation. The companion WebAssembly UI now lives in a sibling project and consumes these APIs separately.
 
 ## Requirements
 - Go 1.21+
 - (Optional) `make` for your own helper scripts
 
 ## Running the alert server
-1. Build the alGUI assets (served statically by the server):
-   ```bash
-   cd web/algui
-   GOOS=js GOARCH=wasm go build -o main.wasm
-   ```
-2. Start the HTTP server:
+1. Start the HTTP server:
    ```bash
    go run ./cmd/alertserver
    ```
-   The binary serves static assets from `web/algui` by default. Set `ALGUI_STATIC_DIR` to override the asset directory.
-3. Streamer data is appended to `data/streamers.json`. Provide a different path through `CreateOptions.FilePath` if you embed the handler elsewhere.
+2. Streamer data is appended to `data/streamers.json`. Provide a different path through `CreateOptions.FilePath` if you embed the handler elsewhere.
+3. (Optional) Build and host the standalone UI from the sibling project if you need a dashboard; it talks to these APIs over HTTP and no longer ships with the server binary (this repository intentionally stays API-only).
 
 ## API reference
-All HTTP routes are registered in `internal/http/v1/router.go`. Update the table below whenever an endpoint is added or altered so this README remains the single source of truth.
+All HTTP routes are registered in `internal/api/v1/router.go`. Update the table below whenever an endpoint is added or altered so this README remains the single source of truth.
 
 | Method | Path                         | Description |
 | ------ | ---------------------------- | ----------- |
@@ -39,7 +34,7 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
 
 ### POST `/api/v1/youtube/subscribe`
 - **Purpose:** Submits an application/x-www-form-urlencoded request to YouTube's hub (`https://pubsubhubbub.appspot.com/subscribe`).
-- **Request body:** JSON matching `internal/platforms/youtube/client.YouTubeRequest`:
+- **Request body:** JSON matching `internal/platforms/youtube/subscriptions.YouTubeRequest`:
   - `topic` (required): full feed URL to subscribe to.
   - `verify` (optional): `"sync"` or `"async"`; defaults to `"async"`.
   - `verifyToken`, `secret`, `leaseSeconds` (optional) pass-through fields.
@@ -89,18 +84,18 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
     }
   }
   ```
-- **Server-managed fields:** `streamer.id` is derived from the alias by removing whitespace, punctuation, and other non-alphanumeric characters. Incoming IDs, `createdAt`, and `updatedAt` values are ignored; timestamps are injected when the record is stored. The UI automatically calls `/api/v1/metadata/description` to pre-fill `streamer.description`, the streamer’s display name, and the YouTube handle/channelId/hubSecret when a channel URL is entered.
+- **Server-managed fields:** `streamer.id` is derived from the alias by removing whitespace, punctuation, and other non-alphanumeric characters. Incoming IDs, `createdAt`, and `updatedAt` values are ignored; timestamps are injected when the record is stored. Companion tooling (for example, the standalone UI) automatically calls `/api/v1/metadata/description` to pre-fill `streamer.description`, the streamer’s display name, and the YouTube handle/channelId/hubSecret when a channel URL is entered.
 - **YouTube subscriptions:** When `platforms.youtube` is supplied, the server resolves the channel ID if necessary and automatically calls the YouTube WebSub hub to subscribe for alerts using the stored hub secret. Failures are logged but do not block the request.
 - **Languages:** When provided, entries must come from the supported language list (see `schema/streamers.schema.json`); duplicates and blank values are rejected.
 - **Validation:** `streamer.alias` must be non-empty and unique once cleaned (submitting a duplicate alias returns `409 Conflict`). When the YouTube block is present, `platforms.youtube.handle` is also required.
 - **Response:** `201 Created` with the stored record echoed back as JSON, or `500 Internal Server Error` if the file append fails.
 
 ### GET `/api/v1/server/config`
-- **Purpose:** Exposes runtime metadata consumed by the alGUI frontend.
+- **Purpose:** Exposes runtime metadata consumed by companion tooling (including the standalone UI).
 - **Response:**
   ```json
   {
-    "name": "alGUI",
+    "name": "live-stream-alerts",
     "addr": "127.0.0.1",
     "port": ":8880",
     "readTimeout": "10s"
@@ -108,7 +103,7 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
   ```
 
 ### POST `/api/v1/metadata/description`
-- **Purpose:** Returns the `<meta name="description">` (or OpenGraph description) for a supplied public URL so the UI can pre-fill streamer descriptions, display names, and YouTube identifiers.
+- **Purpose:** Returns the `<meta name="description">` (or OpenGraph description) for a supplied public URL so tooling can pre-fill streamer descriptions, display names, and YouTube identifiers.
 - **Request body:**
   ```json
   {
@@ -127,18 +122,11 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
 - **Notes:** Only `http`/`https` URLs are allowed. A `502` is returned if scraping fails or the metadata cannot be extracted.
 
 ### Static asset hosting
-- Requests to `/` fall back to the WebAssembly UI served from `web/algui`. When the assets are missing, the server responds with `200 OK` and the message `"alGUI assets not configured"`.
-
-### Resubscribing existing YouTube channels
-- When secrets change or legacy records need to be re-registered with the hub, run:
-  ```bash
-  go run ./cmd/resubscribe -path data/streamers.json
-  ```
-- Use `-alias <alias-or-id>` to target a single streamer (case-insensitive), `-hub-url` to override the default hub endpoint, and `-timeout` to control per-request timeouts.
+- Requests to `/` now respond with `200 OK` and `"UI assets not configured"`. The standalone UI is built, versioned, and hosted from the sibling project instead of bundling inside this repository.
 
 ## Keeping this document current
 Whenever you introduce or modify an endpoint:
-1. Update `internal/http/v1/router.go` (or the relevant router) as usual.
+1. Update `internal/api/v1/router.go` (or the relevant router) as usual.
 2. Add or edit the corresponding row in the API table above.
 3. Expand the detailed section for that endpoint with request/response notes.
 This commitment ensures the README includes **every endpoint from now and into the future**.

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"live-stream-alerts/internal/logging"
-	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
+	youtubeapi "live-stream-alerts/internal/platforms/youtube/api"
 )
 
 const (
@@ -97,7 +97,7 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		s.Logger.Printf("\n---- Incoming request from %s ----\n%s\n", r.RemoteAddr, dump)
 	}
 
-	if youtubehandlers.YouTubeSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
+	if youtubeapi.YouTubeSubscriptionConfirmation(w, r, youtubeapi.SubscriptionConfirmationOptions{
 		Logger: s.Logger,
 	}) {
 		return

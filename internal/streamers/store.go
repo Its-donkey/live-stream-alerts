@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -125,51 +124,6 @@ func Append(path string, record Record) (Record, error) {
 	return record, nil
 }
 
-// UpdateYouTubeLease stores the verification timestamp for the supplied channel ID.
-func UpdateYouTubeLease(path, channelID string, verifiedAt time.Time) error {
-	if channelID == "" {
-		return errors.New("channelID is required")
-	}
-	if path == "" {
-		path = defaultStreamersFile
-	}
-
-	fileMu.Lock()
-	defer fileMu.Unlock()
-
-	fileData, err := readFile(path)
-	if err != nil {
-		return err
-	}
-
-	updated := false
-	for i := range fileData.Records {
-		yt := fileData.Records[i].Platforms.YouTube
-		if yt == nil {
-			continue
-		}
-		if strings.EqualFold(yt.ChannelID, channelID) {
-			yt.HubLeaseRenewalDue = verifiedAt.UTC().Format(time.RFC3339)
-			fileData.Records[i].UpdatedAt = time.Now().UTC()
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		return fmt.Errorf("channel id %s not found", channelID)
-	}
-
-	encoded, err := json.MarshalIndent(fileData, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode streamers file: %w", err)
-	}
-
-	if err := os.WriteFile(path, encoded, 0o644); err != nil {
-		return fmt.Errorf("write streamers file: %w", err)
-	}
-	return nil
-}
-
 // List loads all streamer records from disk.
 func List(path string) ([]Record, error) {
 	if path == "" {
@@ -187,6 +141,38 @@ func List(path string) ([]Record, error) {
 	records := make([]Record, len(fileData.Records))
 	copy(records, fileData.Records)
 	return records, nil
+}
+
+// UpdateFile reads the streamers file, applies the provided mutation, and writes it back to disk atomically.
+func UpdateFile(path string, updateFn func(*File) error) error {
+	if path == "" {
+		return errors.New("streamers file path is required")
+	}
+	if updateFn == nil {
+		return errors.New("updateFn is required")
+	}
+
+	fileMu.Lock()
+	defer fileMu.Unlock()
+
+	fileData, err := readFile(path)
+	if err != nil {
+		return err
+	}
+
+	if err := updateFn(&fileData); err != nil {
+		return err
+	}
+
+	encoded, err := json.MarshalIndent(fileData, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode streamers file: %w", err)
+	}
+
+	if err := os.WriteFile(path, encoded, 0o644); err != nil {
+		return fmt.Errorf("write streamers file: %w", err)
+	}
+	return nil
 }
 
 func readFile(path string) (File, error) {

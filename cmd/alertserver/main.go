@@ -3,23 +3,17 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"io/fs"
-	"mime"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
-	httpv1 "live-stream-alerts/internal/http/v1"
+	apiv1 "live-stream-alerts/internal/api/v1"
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/server"
 )
 
 func main() {
-	_ = mime.AddExtensionType(".wasm", "application/wasm")
-
 	logger := logging.New()
 	const (
 		addr = "127.0.0.1"
@@ -27,12 +21,11 @@ func main() {
 	)
 	var readWindow = 10 * time.Second
 
-	serverHandler := httpv1.New(httpv1.Options{
+	serverHandler := apiv1.New(apiv1.Options{
 		Logger:        logger,
-		StaticFS:      initStaticFS(logger),
 		StreamersPath: "data/streamers.json",
-		RuntimeInfo: httpv1.RuntimeInfo{
-			Name:        "alGUI",
+		RuntimeInfo: apiv1.RuntimeInfo{
+			Name:        "live-stream-alerts",
 			Addr:        addr,
 			Port:        port,
 			ReadTimeout: readWindow.String(),
@@ -70,57 +63,4 @@ func main() {
 			os.Exit(1)
 		}
 	}
-}
-
-func initStaticFS(logger logging.Logger) fs.FS {
-	const rel = "web/algui"
-
-	if dir := os.Getenv("ALGUI_STATIC_DIR"); dir != "" {
-		if fsys, err := dirFS(dir); err == nil {
-			logger.Printf("alGUI assets loaded from %s", dir)
-			return fsys
-		}
-		logger.Printf("failed to use $ALGUI_STATIC_DIR %q", dir)
-	}
-
-	candidates := []string{rel}
-	if exe, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(exe)
-		candidates = append(candidates,
-			filepath.Join(exeDir, "..", rel),
-			filepath.Join(exeDir, "..", "..", rel),
-		)
-	}
-
-	for _, candidate := range candidates {
-		if candidate == "" {
-			continue
-		}
-		if fsys, err := dirFS(candidate); err == nil {
-			if logger != nil {
-				logger.Printf("alGUI assets loaded from %s", candidate)
-			}
-			return fsys
-		}
-	}
-
-	if logger != nil {
-		logger.Printf("alGUI assets directory not found; UI fallback active")
-	}
-	return nil
-}
-
-func dirFS(path string) (fs.FS, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("%s is not a directory", path)
-	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return nil, err
-	}
-	return os.DirFS(abs), nil
 }
