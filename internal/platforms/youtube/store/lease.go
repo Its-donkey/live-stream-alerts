@@ -9,17 +9,15 @@ import (
 	"live-stream-alerts/internal/streamers"
 )
 
-const defaultStreamersFile = "data/streamers.json"
-
-// UpdateLease stores the verification timestamp for the supplied channel ID.
-func UpdateLease(path, channelID string, verifiedAt time.Time) error {
+// RecordLease stores the verification timestamp for the supplied channel ID.
+func RecordLease(path, channelID string, verifiedAt time.Time) error {
 	channelID = strings.TrimSpace(channelID)
 	if channelID == "" {
 		return errors.New("channelID is required")
 	}
 	path = strings.TrimSpace(path)
 	if path == "" {
-		path = defaultStreamersFile
+		path = streamers.DefaultFilePath
 	}
 
 	err := streamers.UpdateFile(path, func(file *streamers.File) error {

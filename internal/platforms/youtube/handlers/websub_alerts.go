@@ -1,4 +1,4 @@
-package api
+package handlers
 
 import (
 	"io"
@@ -19,9 +19,9 @@ type SubscriptionConfirmationOptions struct {
 	StreamersPath string
 }
 
-// HandleVerification handles YouTube PubSubHubbub GET verification requests.
+// HandleSubscriptionConfirmation processes YouTube PubSubHubbub GET verification requests.
 // It returns true when the request has been handled (regardless of success).
-func YouTubeSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, opts SubscriptionConfirmationOptions) bool {
+func HandleSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, opts SubscriptionConfirmationOptions) bool {
 	logger := opts.Logger
 	if r.Method != http.MethodGet {
 		return false
@@ -118,7 +118,7 @@ func YouTubeSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, opt
 		channelID = websub.ExtractChannelID(topic)
 	}
 	if channelID != "" {
-		if err := youtubestore.UpdateLease(opts.StreamersPath, channelID, verifiedAt); err != nil && logger != nil {
+		if err := youtubestore.RecordLease(opts.StreamersPath, channelID, verifiedAt); err != nil && logger != nil {
 			logger.Printf("failed to record hub lease for %s: %v", channelID, err)
 		}
 	}

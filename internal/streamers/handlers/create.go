@@ -16,8 +16,6 @@ import (
 	"live-stream-alerts/internal/streamers"
 )
 
-const defaultStreamersFile = "data/streamers.json"
-
 // CreateOptions configures the streamer handler.
 type CreateOptions struct {
 	FilePath      string
@@ -30,7 +28,7 @@ type CreateOptions struct {
 func NewCreateHandler(opts CreateOptions) http.Handler {
 	path := opts.FilePath
 	if path == "" {
-		path = defaultStreamersFile
+		path = streamers.DefaultFilePath
 	}
 	path = filepath.Clean(path)
 

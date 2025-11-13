@@ -31,8 +31,8 @@ type DescriptionHandlerOptions struct {
 	Client *http.Client
 }
 
-// DescriptionHandler returns an http.Handler that fetches the description of a given URL.
-func DescriptionHandler(opts DescriptionHandlerOptions) http.Handler {
+// NewDescriptionHandler returns an http.Handler that fetches the description of a given URL.
+func NewDescriptionHandler(opts DescriptionHandlerOptions) http.Handler {
 	client := opts.Client
 	if client == nil {
 		client = &http.Client{Timeout: 5 * time.Second}

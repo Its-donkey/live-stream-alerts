@@ -1,5 +1,4 @@
-// file name — /internal/server/server.go
-package server
+package httpserver
 
 import (
 	"errors"
@@ -11,7 +10,7 @@ import (
 	"time"
 
 	"live-stream-alerts/internal/logging"
-	youtubeapi "live-stream-alerts/internal/platforms/youtube/api"
+	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
 )
 
 const (
@@ -19,6 +18,7 @@ const (
 	defaultReadTimeout = 10 * time.Second
 )
 
+// Config describes how the HTTP server should be initialised.
 type Config struct {
 	Addr        string
 	Port        string
@@ -27,38 +27,43 @@ type Config struct {
 	Handler     http.Handler
 }
 
+// Server wraps the configured http.Server alongside its listener for shutdown handling.
 type Server struct {
 	Config
 	listener   net.Listener
 	httpServer *http.Server
 }
 
-func (c Config) New() (*Server, error) {
-	if c.Logger == nil {
-		c.Logger = logging.New()
+// New builds a Server from the supplied configuration.
+func New(config Config) (*Server, error) {
+	if config.Logger == nil {
+		config.Logger = logging.New()
 	}
-	if c.Addr == "" {
-		c.Addr = defaultAddr
+	if config.Addr == "" {
+		config.Addr = defaultAddr
 	}
-	if c.Port == "" {
+	if config.Port == "" {
 		return nil, errors.New("no valid port must be set")
 	}
-	if c.ReadTimeout <= 0 {
-		c.ReadTimeout = defaultReadTimeout
+	if config.ReadTimeout <= 0 {
+		config.ReadTimeout = defaultReadTimeout
 	}
-	s := &Server{Config: c}
-	handler := c.Handler
+
+	srv := &Server{Config: config}
+	handler := config.Handler
 	if handler == nil {
-		handler = http.HandlerFunc(s.handleHTTP)
+		handler = http.HandlerFunc(srv.defaultHandler)
 	}
-	s.httpServer = &http.Server{
-		ReadHeaderTimeout: c.ReadTimeout,
+
+	srv.httpServer = &http.Server{
+		ReadHeaderTimeout: config.ReadTimeout,
 		Handler:           handler,
-		ErrorLog:          logging.AsStdLogger(c.Logger),
+		ErrorLog:          logging.AsStdLogger(config.Logger),
 	}
-	return s, nil
+	return srv, nil
 }
 
+// ListenAndServe starts the HTTP server with the configured address and port.
 func (s *Server) ListenAndServe() error {
 	addr := s.listenAddr()
 	ln, err := net.Listen("tcp", addr)
@@ -82,6 +87,7 @@ func (s *Server) listenAddr() string {
 	return net.JoinHostPort(s.Addr, port)
 }
 
+// Close stops the underlying http.Server.
 func (s *Server) Close() error {
 	if s.httpServer != nil {
 		return s.httpServer.Close()
@@ -89,7 +95,7 @@ func (s *Server) Close() error {
 	return nil
 }
 
-func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *Server) defaultHandler(w http.ResponseWriter, r *http.Request) {
 	dump, err := httputil.DumpRequest(r, true)
 	if err != nil {
 		s.Logger.Printf("dump request from %s: %v", r.RemoteAddr, err)
@@ -97,7 +103,7 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		s.Logger.Printf("\n---- Incoming request from %s ----\n%s\n", r.RemoteAddr, dump)
 	}
 
-	if youtubeapi.YouTubeSubscriptionConfirmation(w, r, youtubeapi.SubscriptionConfirmationOptions{
+	if youtubehandlers.HandleSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
 		Logger: s.Logger,
 	}) {
 		return

@@ -6,7 +6,7 @@ import (
 	"net/http/httputil"
 
 	"live-stream-alerts/internal/logging"
-	youtubeapi "live-stream-alerts/internal/platforms/youtube/api"
+	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
 	ytmetadatahandlers "live-stream-alerts/internal/platforms/youtube/metadata/handlers"
 	streamershandlers "live-stream-alerts/internal/streamers/handlers"
 )
@@ -26,23 +26,24 @@ type Options struct {
 	StreamersPath string
 }
 
-func New(opts Options) http.Handler {
+// NewRouter constructs the HTTP router for the public API.
+func NewRouter(opts Options) http.Handler {
 	mux := http.NewServeMux()
 	logger := opts.Logger
 	streamersPath := opts.StreamersPath
 
-	mux.Handle("/api/youtube/subscribe", youtubeapi.NewSubscribeHandler(youtubeapi.YouTubeSubscribeOptions{
+	mux.Handle("/api/youtube/subscribe", youtubehandlers.NewSubscribeHandler(youtubehandlers.SubscribeHandlerOptions{
 		Logger: logger,
 	}))
 
-	mux.Handle("/api/youtube/channel", youtubeapi.ChannelLookupHandler(nil))
+	mux.Handle("/api/youtube/channel", youtubehandlers.NewChannelLookupHandler(nil))
 
 	mux.Handle("/api/streamers", streamershandlers.NewCreateHandler(streamershandlers.CreateOptions{
 		Logger:   logger,
 		FilePath: streamersPath,
 	}))
 
-	mux.Handle("/api/metadata/description", ytmetadatahandlers.DescriptionHandler(ytmetadatahandlers.DescriptionHandlerOptions{}))
+	mux.Handle("/api/metadata/description", ytmetadatahandlers.NewDescriptionHandler(ytmetadatahandlers.DescriptionHandlerOptions{}))
 
 	mux.HandleFunc("/api/server/config", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, opts.RuntimeInfo)

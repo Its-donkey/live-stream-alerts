@@ -1,4 +1,4 @@
-package api
+package handlers
 
 import (
 	"encoding/json"
@@ -10,16 +10,15 @@ import (
 	"live-stream-alerts/internal/platforms/youtube/subscriptions"
 )
 
-// YouTubeSubscribeOptions configures the subscribe handler.
-type YouTubeSubscribeOptions struct {
+// SubscribeHandlerOptions configures the subscribe handler.
+type SubscribeHandlerOptions struct {
 	HubURL string
 	Client *http.Client
 	Logger logging.Logger
 }
 
 // NewSubscribeHandler returns an http.Handler that accepts POST requests and forwards them to YouTube's hub.
-func NewSubscribeHandler(opts YouTubeSubscribeOptions) http.Handler {
-	// hubURL := opts.HubURL
+func NewSubscribeHandler(opts SubscribeHandlerOptions) http.Handler {
 	client := opts.Client
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
@@ -41,6 +40,9 @@ func NewSubscribeHandler(opts YouTubeSubscribeOptions) http.Handler {
 
 		subscriptions.NormaliseSubscribeRequest(&subscribeReq)
 		requestHubURL := subscriptions.DefaultHubURL
+		if opts.HubURL != "" {
+			requestHubURL = opts.HubURL
+		}
 
 		resp, body, err := subscriptions.SubscribeYouTube(r.Context(), client, requestHubURL, subscribeReq)
 		if err != nil && opts.Logger != nil {
