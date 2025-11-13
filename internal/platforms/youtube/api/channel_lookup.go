@@ -1,10 +1,10 @@
-package handlers
+package api
 
 import (
 	"encoding/json"
 	"net/http"
 
-	youtubeclient "live-stream-alerts/internal/platforms/youtube/client"
+	"live-stream-alerts/internal/platforms/youtube/subscriptions"
 )
 
 // ChannelLookupHandler resolves a YouTube handle to its canonical channel ID.
@@ -17,9 +17,9 @@ func ChannelLookupHandler(client *http.Client) http.Handler {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		
+
 		defer r.Body.Close()
-		
+
 		var payload struct {
 			Handle string `json:"handle"`
 		}
@@ -34,7 +34,7 @@ func ChannelLookupHandler(client *http.Client) http.Handler {
 			return
 		}
 
-		channelID, err := youtubeclient.ResolveChannelID(r.Context(), handle, client)
+		channelID, err := subscriptions.ResolveChannelID(r.Context(), handle, client)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return

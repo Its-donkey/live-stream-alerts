@@ -1,4 +1,4 @@
-package client
+package subscriptions
 
 import (
 	"context"
@@ -9,11 +9,14 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"live-stream-alerts/internal/logging"
+	"live-stream-alerts/internal/platforms/youtube/websub"
 )
 
 const (
 	DefaultHubURL      = "https://pubsubhubbub.appspot.com/subscribe"
-	DefaultCallbackURL = "https://sharpen.live/alert"
+	DefaultCallbackURL = "https://sharpen.live/alerts"
 	DefaultLease       = 864000
 	DefaultMode        = "subscribe"
 )
@@ -27,6 +30,7 @@ type YouTubeRequest struct {
 	VerifyToken  string
 	Secret       string
 	LeaseSeconds int
+	ChannelID    string
 }
 
 // NormaliseSubscribeRequest applies the enforced defaults required by the system.
@@ -70,16 +74,38 @@ func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req Y
 		return nil, nil, fmt.Errorf("verify must be 'sync' or 'async', got %q", verify)
 	}
 
+	if strings.TrimSpace(req.VerifyToken) == "" {
+		req.VerifyToken = websub.GenerateVerifyToken()
+	}
+
+	channelID := strings.TrimSpace(req.ChannelID)
+	if channelID == "" {
+		channelID = websub.ExtractChannelID(req.Topic)
+	}
+
+	websub.RegisterExpectation(websub.Expectation{
+		Mode:         mode,
+		Topic:        req.Topic,
+		VerifyToken:  req.VerifyToken,
+		LeaseSeconds: req.LeaseSeconds,
+		Secret:       req.Secret,
+		ChannelID:    channelID,
+	})
+	registeredToken := req.VerifyToken
+	subscriptionAccepted := false
+	defer func() {
+		if !subscriptionAccepted {
+			websub.CancelExpectation(registeredToken)
+		}
+	}()
+
 	// Build application/x-www-form-urlencoded body
 	form := url.Values{}
 	form.Set("hub.mode", mode)
 	form.Set("hub.topic", req.Topic)
 	form.Set("hub.callback", req.Callback)
 	form.Set("hub.verify", verify)
-
-	if req.VerifyToken != "" {
-		form.Set("hub.verify_token", req.VerifyToken)
-	}
+	form.Set("hub.verify_token", req.VerifyToken)
 	// Optional: request a lease duration; hub may ignore it.
 	if req.LeaseSeconds > 0 {
 		form.Set("hub.lease_seconds", fmt.Sprintf("%d", req.LeaseSeconds))
@@ -92,7 +118,8 @@ func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req Y
 		}
 	}
 
-	fmt.Println(form.Encode())
+	logging.New().Printf("Submitting YouTube WebSub subscription: hub=%s topic=%s callback=%s mode=%s verify=%s lease=%d",
+		hubURL, req.Topic, req.Callback, mode, verify, req.LeaseSeconds)
 
 	// Build POST request
 	hubURL = strings.TrimSpace(hubURL)
@@ -118,5 +145,6 @@ func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req Y
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return resp, body, fmt.Errorf("hub returned non-2xx: %s", resp.Status)
 	}
+	subscriptionAccepted = true
 	return resp, body, nil
 }

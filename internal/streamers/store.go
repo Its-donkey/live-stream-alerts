@@ -12,7 +12,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const defaultSchemaRef = "../schema/streamers.schema.json"
+const (
+	defaultSchemaRef     = "../schema/streamers.schema.json"
+	defaultStreamersFile = "data/streamers.json"
+)
 
 // File represents the on-disk format containing all streamer records.
 type File struct {
@@ -30,13 +33,15 @@ type Record struct {
 
 // Streamer captures personal information for a streamer.
 type Streamer struct {
-	ID        string `json:"id"`
-	Alias     string `json:"alias"`
-	FirstName string `json:"firstName"`
-	LastName  string `json:"lastName"`
-	Email     string `json:"email"`
-	City      string `json:"city,omitempty"`
-	Country   string `json:"country,omitempty"`
+	ID          string   `json:"id"`
+	Alias       string   `json:"alias"`
+	Description string   `json:"description,omitempty"`
+	FirstName   string   `json:"firstName"`
+	LastName    string   `json:"lastName"`
+	Email       string   `json:"email"`
+	City        string   `json:"city,omitempty"`
+	Country     string   `json:"country,omitempty"`
+	Languages   []string `json:"languages,omitempty"`
 }
 
 // Platforms groups platform-specific configuration.
@@ -66,7 +71,10 @@ type TwitchPlatform struct {
 	BroadcasterID string `json:"broadcasterId,omitempty"`
 }
 
-var fileMu sync.Mutex
+var (
+	fileMu                 sync.Mutex
+	ErrDuplicateStreamerID = errors.New("streamer id already exists")
+)
 
 // Append adds a new streamer record to disk and returns a copy with timestamps populated.
 func Append(path string, record Record) (Record, error) {
@@ -95,6 +103,12 @@ func Append(path string, record Record) (Record, error) {
 	now := time.Now().UTC()
 	record.CreatedAt = now
 	record.UpdatedAt = now
+
+	for _, existing := range fileData.Records {
+		if existing.Streamer.ID == record.Streamer.ID {
+			return Record{}, fmt.Errorf("%w: %s", ErrDuplicateStreamerID, record.Streamer.ID)
+		}
+	}
 
 	fileData.Records = append(fileData.Records, record)
 
@@ -127,6 +141,38 @@ func List(path string) ([]Record, error) {
 	records := make([]Record, len(fileData.Records))
 	copy(records, fileData.Records)
 	return records, nil
+}
+
+// UpdateFile reads the streamers file, applies the provided mutation, and writes it back to disk atomically.
+func UpdateFile(path string, updateFn func(*File) error) error {
+	if path == "" {
+		return errors.New("streamers file path is required")
+	}
+	if updateFn == nil {
+		return errors.New("updateFn is required")
+	}
+
+	fileMu.Lock()
+	defer fileMu.Unlock()
+
+	fileData, err := readFile(path)
+	if err != nil {
+		return err
+	}
+
+	if err := updateFn(&fileData); err != nil {
+		return err
+	}
+
+	encoded, err := json.MarshalIndent(fileData, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode streamers file: %w", err)
+	}
+
+	if err := os.WriteFile(path, encoded, 0o644); err != nil {
+		return fmt.Errorf("write streamers file: %w", err)
+	}
+	return nil
 }
 
 func readFile(path string) (File, error) {

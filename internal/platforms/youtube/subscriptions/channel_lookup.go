@@ -1,4 +1,4 @@
-package client
+package subscriptions
 
 import (
 	"context"

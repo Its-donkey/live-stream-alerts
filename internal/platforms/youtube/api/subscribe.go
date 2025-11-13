@@ -1,4 +1,4 @@
-package handlers
+package api
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"live-stream-alerts/internal/logging"
-	youtubeclient "live-stream-alerts/internal/platforms/youtube/client"
+	"live-stream-alerts/internal/platforms/youtube/subscriptions"
 )
 
 // YouTubeSubscribeOptions configures the subscribe handler.
@@ -33,16 +33,16 @@ func NewSubscribeHandler(opts YouTubeSubscribeOptions) http.Handler {
 		}
 
 		defer r.Body.Close()
-		var subscribeReq youtubeclient.YouTubeRequest
+		var subscribeReq subscriptions.YouTubeRequest
 		if err := json.NewDecoder(r.Body).Decode(&subscribeReq); err != nil {
 			http.Error(w, "invalid JSON body", http.StatusBadRequest)
 			return
 		}
 
-		youtubeclient.NormaliseSubscribeRequest(&subscribeReq)
-		requestHubURL := youtubeclient.DefaultHubURL
+		subscriptions.NormaliseSubscribeRequest(&subscribeReq)
+		requestHubURL := subscriptions.DefaultHubURL
 
-		resp, body, err := youtubeclient.SubscribeYouTube(r.Context(), client, requestHubURL, subscribeReq)
+		resp, body, err := subscriptions.SubscribeYouTube(r.Context(), client, requestHubURL, subscribeReq)
 		if err != nil && opts.Logger != nil {
 			opts.Logger.Printf("subscribe request hub response: %v", err)
 		}

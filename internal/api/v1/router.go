@@ -2,12 +2,12 @@ package v1
 
 import (
 	"encoding/json"
-	"io/fs"
 	"net/http"
 	"net/http/httputil"
 
 	"live-stream-alerts/internal/logging"
-	ytclienthandlers "live-stream-alerts/internal/platforms/youtube/handlers"
+	youtubeapi "live-stream-alerts/internal/platforms/youtube/api"
+	ytmetadatahandlers "live-stream-alerts/internal/platforms/youtube/metadata/handlers"
 	streamershandlers "live-stream-alerts/internal/streamers/handlers"
 )
 
@@ -21,47 +21,38 @@ type RuntimeInfo struct {
 
 // Options configures the HTTP router.
 type Options struct {
-	Logger      logging.Logger
-	StaticFS    fs.FS
-	RuntimeInfo RuntimeInfo
+	Logger        logging.Logger
+	RuntimeInfo   RuntimeInfo
+	StreamersPath string
 }
 
 func New(opts Options) http.Handler {
 	mux := http.NewServeMux()
 	logger := opts.Logger
+	streamersPath := opts.StreamersPath
 
-	mux.HandleFunc("/alerts", func(w http.ResponseWriter, r *http.Request) {
-		ytclienthandlers.SubscriptionConfirmation(w, r, logger)
-	})
-
-	mux.Handle("/api/v1/youtube/subscribe", ytclienthandlers.NewSubscribeHandler(ytclienthandlers.YouTubeSubscribeOptions{
+	mux.Handle("/api/youtube/subscribe", youtubeapi.NewSubscribeHandler(youtubeapi.YouTubeSubscribeOptions{
 		Logger: logger,
 	}))
 
-	mux.Handle("/api/v1/youtube/new/subscribe", ytclienthandlers.NewSubscribeHandler(ytclienthandlers.YouTubeSubscribeOptions{
-		Logger: logger,
+	mux.Handle("/api/youtube/channel", youtubeapi.ChannelLookupHandler(nil))
+
+	mux.Handle("/api/streamers", streamershandlers.NewCreateHandler(streamershandlers.CreateOptions{
+		Logger:   logger,
+		FilePath: streamersPath,
 	}))
 
-	mux.Handle("/api/v1/youtube/channel", ytclienthandlers.ChannelLookupHandler(nil))
+	mux.Handle("/api/metadata/description", ytmetadatahandlers.DescriptionHandler(ytmetadatahandlers.DescriptionHandlerOptions{}))
 
-	mux.Handle("/api/v1/streamers", streamershandlers.NewCreateHandler(streamershandlers.CreateOptions{
-		Logger: logger,
-	}))
-
-	mux.HandleFunc("/api/v1/server/config", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/server/config", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, opts.RuntimeInfo)
 	})
 
-	if opts.StaticFS != nil {
-		fileServer := http.FileServer(http.FS(opts.StaticFS))
-		mux.Handle("/", fileServer)
-	} else {
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("alGUI assets not configured"))
-		})
-	}
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("UI assets not configured"))
+	})
 
 	if logger == nil {
 		return mux

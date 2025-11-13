@@ -1,26 +1,21 @@
 # live-stream-alerts
 
-A lightweight Go service that proxies YouTube WebSub subscriptions, stores streamer metadata, and serves the alGUI WebAssembly frontend alongside operational endpoints.
+A lightweight Go service that proxies YouTube WebSub subscriptions, stores streamer metadata, and exposes operational endpoints for downstream automation. The companion WebAssembly UI now lives in a sibling project and consumes these APIs separately.
 
 ## Requirements
 - Go 1.21+
 - (Optional) `make` for your own helper scripts
 
 ## Running the alert server
-1. Build the alGUI assets (served statically by the server):
-   ```bash
-   cd web/algui
-   GOOS=js GOARCH=wasm go build -o main.wasm
-   ```
-2. Start the HTTP server:
+1. Start the HTTP server:
    ```bash
    go run ./cmd/alertserver
    ```
-   The binary serves static assets from `web/algui` by default. Set `ALGUI_STATIC_DIR` to override the asset directory.
-3. Streamer data is appended to `data/streamers.json`. Provide a different path through `CreateOptions.FilePath` if you embed the handler elsewhere.
+2. Streamer data is appended to `data/streamers.json`. Provide a different path through `CreateOptions.FilePath` if you embed the handler elsewhere.
+3. (Optional) Build and host the standalone UI from the sibling project if you need a dashboard; it talks to these APIs over HTTP and no longer ships with the server binary (this repository intentionally stays API-only).
 
 ## API reference
-All HTTP routes are registered in `internal/http/v1/router.go`. Update the table below whenever an endpoint is added or altered so this README remains the single source of truth.
+All HTTP routes are registered in `internal/api/v1/router.go`. Update the table below whenever an endpoint is added or altered so this README remains the single source of truth.
 
 | Method | Path                         | Description |
 | ------ | ---------------------------- | ----------- |
@@ -29,6 +24,7 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
 | POST   | `/api/v1/youtube/channel`    | Resolves a YouTube `@handle` into its canonical channel ID. |
 | GET    | `/api/v1/streamers`          | Returns every stored streamer record. |
 | POST   | `/api/v1/streamers`          | Persists streamer metadata to `data/streamers.json`. |
+| POST   | `/api/v1/metadata/description` | Scrapes a public URL and returns its meta description/title. |
 | GET    | `/api/v1/server/config`      | Returns the server runtime information consumed by the UI. |
 
 ### GET `/alerts`
@@ -38,7 +34,7 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
 
 ### POST `/api/v1/youtube/subscribe`
 - **Purpose:** Submits an application/x-www-form-urlencoded request to YouTube's hub (`https://pubsubhubbub.appspot.com/subscribe`).
-- **Request body:** JSON matching `internal/platforms/youtube/client.YouTubeRequest`:
+- **Request body:** JSON matching `internal/platforms/youtube/subscriptions.YouTubeRequest`:
   - `topic` (required): full feed URL to subscribe to.
   - `verify` (optional): `"sync"` or `"async"`; defaults to `"async"`.
   - `verifyToken`, `secret`, `leaseSeconds` (optional) pass-through fields.
@@ -73,6 +69,8 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
   {
     "streamer": {
       "alias": "SharpenDev",
+      "description": "Tantalum chef knife maker focusing on live sharpening Q&A.",
+      "languages": ["English", "Japanese"],
       "firstName": "Jane",
       "lastName": "Doe",
       "email": "jane@example.com"
@@ -86,29 +84,49 @@ All HTTP routes are registered in `internal/http/v1/router.go`. Update the table
     }
   }
   ```
-- **Server-managed fields:** Any incoming `streamer.id`, `createdAt`, or `updatedAt` values are ignored; IDs and timestamps are injected when the record is stored.
-- **Validation:** `streamer.firstName`, `streamer.lastName`, and `streamer.email` must be non-empty. When the YouTube block is present, `platforms.youtube.handle` is also required.
-- **Validation:** `streamer.alias` must be non-empty. When the YouTube block is present, `platforms.youtube.handle` is also required.
+- **Server-managed fields:** `streamer.id` is derived from the alias by removing whitespace, punctuation, and other non-alphanumeric characters. Incoming IDs, `createdAt`, and `updatedAt` values are ignored; timestamps are injected when the record is stored. Companion tooling (for example, the standalone UI) automatically calls `/api/v1/metadata/description` to pre-fill `streamer.description`, the streamer’s display name, and the YouTube handle/channelId/hubSecret when a channel URL is entered.
+- **YouTube subscriptions:** When `platforms.youtube` is supplied, the server resolves the channel ID if necessary and automatically calls the YouTube WebSub hub to subscribe for alerts using the stored hub secret. Failures are logged but do not block the request.
+- **Languages:** When provided, entries must come from the supported language list (see `schema/streamers.schema.json`); duplicates and blank values are rejected.
+- **Validation:** `streamer.alias` must be non-empty and unique once cleaned (submitting a duplicate alias returns `409 Conflict`). When the YouTube block is present, `platforms.youtube.handle` is also required.
 - **Response:** `201 Created` with the stored record echoed back as JSON, or `500 Internal Server Error` if the file append fails.
 
 ### GET `/api/v1/server/config`
-- **Purpose:** Exposes runtime metadata consumed by the alGUI frontend.
+- **Purpose:** Exposes runtime metadata consumed by companion tooling (including the standalone UI).
 - **Response:**
   ```json
   {
-    "name": "alGUI",
+    "name": "live-stream-alerts",
     "addr": "127.0.0.1",
     "port": ":8880",
     "readTimeout": "10s"
   }
   ```
 
+### POST `/api/v1/metadata/description`
+- **Purpose:** Returns the `<meta name="description">` (or OpenGraph description) for a supplied public URL so tooling can pre-fill streamer descriptions, display names, and YouTube identifiers.
+- **Request body:**
+  ```json
+  {
+    "url": "https://www.youtube.com/@example"
+  }
+  ```
+- **Response:**
+  ```json
+  {
+    "description": "Channel summary pulled from the destination site.",
+    "title": "Example Channel",
+    "handle": "@example",
+    "channelId": "UCabc123"
+  }
+  ```
+- **Notes:** Only `http`/`https` URLs are allowed. A `502` is returned if scraping fails or the metadata cannot be extracted.
+
 ### Static asset hosting
-- Requests to `/` fall back to the WebAssembly UI served from `web/algui`. When the assets are missing, the server responds with `200 OK` and the message `"alGUI assets not configured"`.
+- Requests to `/` now respond with `200 OK` and `"UI assets not configured"`. The standalone UI is built, versioned, and hosted from the sibling project instead of bundling inside this repository.
 
 ## Keeping this document current
 Whenever you introduce or modify an endpoint:
-1. Update `internal/http/v1/router.go` (or the relevant router) as usual.
+1. Update `internal/api/v1/router.go` (or the relevant router) as usual.
 2. Add or edit the corresponding row in the API table above.
 3. Expand the detailed section for that endpoint with request/response notes.
 This commitment ensures the README includes **every endpoint from now and into the future**.
