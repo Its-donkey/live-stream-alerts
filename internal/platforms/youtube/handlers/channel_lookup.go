@@ -1,4 +1,4 @@
-package api
+package handlers
 
 import (
 	"encoding/json"
@@ -7,11 +7,9 @@ import (
 	"live-stream-alerts/internal/platforms/youtube/subscriptions"
 )
 
-// ChannelLookupHandler resolves a YouTube handle to its canonical channel ID.
-func ChannelLookupHandler(client *http.Client) http.Handler {
+// NewChannelLookupHandler resolves a YouTube handle to its canonical channel ID.
+func NewChannelLookupHandler(client *http.Client) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var handle string
-
 		if r.Method != http.MethodPost {
 			w.Header().Set("Allow", http.MethodPost)
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -27,8 +25,7 @@ func ChannelLookupHandler(client *http.Client) http.Handler {
 			http.Error(w, "invalid JSON body", http.StatusBadRequest)
 			return
 		}
-		handle = payload.Handle
-
+		handle := payload.Handle
 		if handle == "" {
 			http.Error(w, "there is no value for handle set", http.StatusBadRequest)
 			return
@@ -41,7 +38,7 @@ func ChannelLookupHandler(client *http.Client) http.Handler {
 		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"handle":    handle,
 			"channelId": channelID,
 		})

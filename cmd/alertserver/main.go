@@ -1,4 +1,3 @@
-// file name — /cmd/alertserver/main.go
 package main
 
 import (
@@ -9,8 +8,9 @@ import (
 	"time"
 
 	apiv1 "live-stream-alerts/internal/api/v1"
+	"live-stream-alerts/internal/httpserver"
 	"live-stream-alerts/internal/logging"
-	"live-stream-alerts/internal/server"
+	"live-stream-alerts/internal/streamers"
 )
 
 func main() {
@@ -19,11 +19,11 @@ func main() {
 		addr = "127.0.0.1"
 		port = ":8880"
 	)
-	var readWindow = 10 * time.Second
+	readWindow := 10 * time.Second
 
-	serverHandler := apiv1.New(apiv1.Options{
+	router := apiv1.NewRouter(apiv1.Options{
 		Logger:        logger,
-		StreamersPath: "data/streamers.json",
+		StreamersPath: streamers.DefaultFilePath,
 		RuntimeInfo: apiv1.RuntimeInfo{
 			Name:        "live-stream-alerts",
 			Addr:        addr,
@@ -32,14 +32,14 @@ func main() {
 		},
 	})
 
-	s := server.Config{
+	cfg := httpserver.Config{
 		Addr:        addr,
 		Port:        port,
 		ReadTimeout: readWindow,
 		Logger:      logger,
-		Handler:     serverHandler,
+		Handler:     router,
 	}
-	srv, err := s.New()
+	srv, err := httpserver.New(cfg)
 	if err != nil {
 		logger.Printf("Failed to build server: %v", err)
 		os.Exit(1)
@@ -55,11 +55,11 @@ func main() {
 
 	select {
 	case <-ctx.Done():
-		s.Logger.Printf("Shutting down...")
+		cfg.Logger.Printf("Shutting down...")
 		_ = srv.Close()
 	case err := <-errCh:
 		if err != nil {
-			s.Logger.Printf("Server error: %v", err)
+			cfg.Logger.Printf("Server error: %v", err)
 			os.Exit(1)
 		}
 	}

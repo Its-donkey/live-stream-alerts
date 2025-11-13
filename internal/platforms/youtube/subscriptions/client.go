@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 )
 
@@ -40,10 +39,9 @@ func NormaliseSubscribeRequest(req *YouTubeRequest) {
 	req.LeaseSeconds = DefaultLease
 }
 
-// YouTubeRequest is your provided shape; using as-is.
+// SubscribeYouTube executes a WebSub subscription call against the provided hub URL.
 // Fields expected:
-//
-//	Topic, Callback (sic), Mode, Verify, VerifyToken, Secret, LeaseSeconds
+//   - Topic, Callback, Mode, Verify, VerifyToken, Secret, LeaseSeconds
 //
 // For WebSub subscribe, Mode should be "subscribe"; Verify is "sync" or "async".
 func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req YouTubeRequest) (*http.Response, []byte, error) {
@@ -68,7 +66,7 @@ func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req Y
 	}
 	verify := strings.TrimSpace(req.Verify)
 	if verify == "" {
-		verify = "async" // typical default for Google’s hub
+		verify = "async" // typical default for Google's hub
 	}
 	if verify != "async" && verify != "sync" {
 		return nil, nil, fmt.Errorf("verify must be 'sync' or 'async', got %q", verify)
@@ -118,10 +116,6 @@ func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req Y
 		}
 	}
 
-	logging.New().Printf("Submitting YouTube WebSub subscription: hub=%s topic=%s callback=%s mode=%s verify=%s lease=%d",
-		hubURL, req.Topic, req.Callback, mode, verify, req.LeaseSeconds)
-
-	// Build POST request
 	hubURL = strings.TrimSpace(hubURL)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, hubURL, strings.NewReader(form.Encode()))
 	if err != nil {
@@ -130,7 +124,6 @@ func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req Y
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	httpReq.Header.Set("User-Agent", "sharpen-live-websub-client/1.0")
 
-	// Send
 	resp, err := hc.Do(httpReq)
 	if err != nil {
 		return nil, nil, fmt.Errorf("post to hub: %w", err)

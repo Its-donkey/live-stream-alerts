@@ -13,8 +13,10 @@ import (
 )
 
 const (
-	defaultSchemaRef     = "../schema/streamers.schema.json"
-	defaultStreamersFile = "data/streamers.json"
+	// DefaultSchemaPath points to the JSON schema that describes the on-disk format.
+	DefaultSchemaPath = "../schema/streamers.schema.json"
+	// DefaultFilePath is the default location for storing streamer records.
+	DefaultFilePath = "data/streamers.json"
 )
 
 // File represents the on-disk format containing all streamer records.
@@ -94,7 +96,7 @@ func Append(path string, record Record) (Record, error) {
 		return Record{}, err
 	}
 	if fileData.SchemaRef == "" {
-		fileData.SchemaRef = defaultSchemaRef
+		fileData.SchemaRef = DefaultSchemaPath
 	}
 
 	if record.Streamer.ID == "" {
@@ -180,14 +182,14 @@ func readFile(path string) (File, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			fileData = File{SchemaRef: defaultSchemaRef, Records: []Record{}}
+			fileData = File{SchemaRef: DefaultSchemaPath, Records: []Record{}}
 			return fileData, nil
 		}
 		return File{}, fmt.Errorf("read streamers file: %w", err)
 	}
 
 	if len(data) == 0 {
-		fileData = File{SchemaRef: defaultSchemaRef, Records: []Record{}}
+		fileData = File{SchemaRef: DefaultSchemaPath, Records: []Record{}}
 		return fileData, nil
 	}
 
