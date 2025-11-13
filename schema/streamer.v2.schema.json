@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/streamer.v2.schema.json",
+  "title": "Streamer",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "alias", "platforms", "createdAt", "updatedAt"],
+  "properties": {
+    "id": { "type": "string", "format": "uuid", "readOnly": true, "description": "Stable internal ID" },
+    "alias": { "type": "string", "minLength": 1, "maxLength": 64, "description": "Public-facing alias" },
+    "firstName": { "type": "string" },
+    "lastName": { "type": "string" },
+    "description": { "type": "string" },
+    "email": { "type": "string", "format": "email" },
+    "city": { "type": "string" },
+    "country": { "type": "string" },
+    "languages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": [
+          "English","Afrikaans","Albanian","Amharic","Armenian","Azerbaijani","Basque","Belarusian","Bosnian",
+          "Bulgarian","Catalan","Cebuano","Croatian","Czech","Danish","Dutch","Estonian","Filipino","Finnish",
+          "Galician","Georgian","German","Greek","Gujarati","Haitian Creole","Hebrew","Hmong","Hungarian",
+          "Icelandic","Igbo","Italian","Japanese","Javanese","Kannada","Kazakh","Khmer","Kinyarwanda","Korean",
+          "Kurdish","Lao","Latvian","Lithuanian","Luxembourgish","Macedonian","Malay","Malayalam","Maltese",
+          "Marathi","Mongolian","Nepali","Norwegian","Pashto","Persian","Polish","Punjabi","Romanian","Serbian",
+          "Sinhala","Slovak","Slovenian","Somali","Swahili","Swedish","Tamil","Telugu","Thai","Turkish",
+          "Ukrainian","Urdu","Uzbek","Vietnamese","Welsh","Xhosa","Yoruba","Zulu"
+        ]
+      },
+      "description": "Languages used on the channel (supported set)"
+    },
+    "platforms": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": { "type": "string", "enum": ["youtube", "facebook", "twitch"] },
+
+          "handle": { "type": "string", "description": "YouTube channel handle" },
+          "channelId": { "type": "string", "description": "Canonical UC channel ID" },
+          "hubLeaseRenewalDue": { "type": "string", "format": "date-time" },
+
+          "pageId": { "type": "string", "description": "Facebook page identifier" },
+
+          "username": { "type": "string", "description": "Twitch broadcaster username" },
+          "broadcasterId": { "type": "string", "description": "Twitch broadcaster ID" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "type": { "const": "youtube" } } },
+            "then": { "required": ["handle", "channelId"] }
+          },
+          {
+            "if": { "properties": { "type": { "const": "facebook" } } },
+            "then": { "required": ["pageId"] }
+          },
+          {
+            "if": { "properties": { "type": { "const": "twitch" } } },
+            "then": { "required": ["username", "broadcasterId"] }
+          }
+        ]
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time", "readOnly": true },
+    "updatedAt": { "type": "string", "format": "date-time", "readOnly": true }
+  }
+}
