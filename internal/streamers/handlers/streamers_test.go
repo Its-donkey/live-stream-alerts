@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"live-stream-alerts/internal/streamers"
 )
@@ -126,8 +125,7 @@ func TestStreamersHandlerDeleteSuccess(t *testing.T) {
 	handler := StreamersHandler(StreamOptions{FilePath: path})
 	payload := map[string]any{
 		"streamer": map[string]string{
-			"id":        record.Streamer.ID,
-			"createdAt": record.CreatedAt.Format(time.RFC3339Nano),
+			"id": record.Streamer.ID,
 		},
 	}
 	body, _ := json.Marshal(payload)
@@ -159,7 +157,7 @@ func TestStreamersHandlerDeleteValidations(t *testing.T) {
 	handler := StreamersHandler(StreamOptions{FilePath: path})
 
 	t.Run("missing path id", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodDelete, "/api/streamers/", bytes.NewBufferString(`{"streamer":{"id":"","createdAt":""}}`))
+		req := httptest.NewRequest(http.MethodDelete, "/api/streamers/", bytes.NewBufferString(`{"streamer":{"id":""}}`))
 		rr := httptest.NewRecorder()
 
 		handler.ServeHTTP(rr, req)
@@ -170,7 +168,7 @@ func TestStreamersHandlerDeleteValidations(t *testing.T) {
 	})
 
 	t.Run("body mismatch", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodDelete, "/api/streamers/one", bytes.NewBufferString(`{"streamer":{"id":"two","createdAt":"2025-01-01T00:00:00Z"}}`))
+		req := httptest.NewRequest(http.MethodDelete, "/api/streamers/one", bytes.NewBufferString(`{"streamer":{"id":"two"}}`))
 		rr := httptest.NewRecorder()
 
 		handler.ServeHTTP(rr, req)
@@ -180,39 +178,8 @@ func TestStreamersHandlerDeleteValidations(t *testing.T) {
 		}
 	})
 
-	t.Run("timestamp mismatch", func(t *testing.T) {
-		rec, err := streamers.Append(path, streamers.Record{
-			Streamer: streamers.Streamer{
-				ID:        "HasTimestamp",
-				Alias:     "HasTimestamp",
-				FirstName: "Time",
-				LastName:  "Stamp",
-				Email:     "time@example.com",
-			},
-		})
-		if err != nil {
-			t.Fatalf("append: %v", err)
-		}
-		defer func() {
-			_ = streamers.Delete(path, rec.Streamer.ID, rec.CreatedAt.Format(time.RFC3339Nano))
-		}()
-
-		req := httptest.NewRequest(
-			http.MethodDelete,
-			"/api/streamers/"+rec.Streamer.ID,
-			bytes.NewBufferString(`{"streamer":{"id":"`+rec.Streamer.ID+`","createdAt":"`+rec.CreatedAt.Add(time.Hour).Format(time.RFC3339Nano)+`"}}`),
-		)
-		rr := httptest.NewRecorder()
-
-		handler.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusConflict {
-			t.Fatalf("expected 409 for timestamp mismatch, got %d", rr.Code)
-		}
-	})
-
 	t.Run("not found", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodDelete, "/api/streamers/missing", bytes.NewBufferString(`{"streamer":{"id":"missing","createdAt":"2025-01-01T00:00:00Z"}}`))
+		req := httptest.NewRequest(http.MethodDelete, "/api/streamers/missing", bytes.NewBufferString(`{"streamer":{"id":"missing"}}`))
 		rr := httptest.NewRecorder()
 
 		handler.ServeHTTP(rr, req)

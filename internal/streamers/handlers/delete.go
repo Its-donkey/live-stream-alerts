@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/streamers"
@@ -14,8 +13,7 @@ import (
 
 type deleteRequest struct {
 	Streamer struct {
-		ID        string `json:"id"`
-		CreatedAt string `json:"createdAt"`
+		ID string `json:"id"`
 	} `json:"streamer"`
 }
 
@@ -54,25 +52,11 @@ func deleteStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 		return
 	}
 
-	// Validate createdAt
-	createdAt := strings.TrimSpace(body.Streamer.CreatedAt)
-	if createdAt == "" {
-		http.Error(w, "streamer.createdAt is required", http.StatusBadRequest)
-		return
-	}
-	if !isRFC3339(createdAt) {
-		http.Error(w, "streamer.createdAt must be a valid RFC3339 timestamp", http.StatusBadRequest)
-		return
-	}
-
 	// Perform delete via streamers.Delete
-	if err := streamers.Delete(path, id, createdAt); err != nil {
+	if err := streamers.Delete(path, id); err != nil {
 		switch {
 		case errors.Is(err, streamers.ErrStreamerNotFound):
 			http.Error(w, "streamer not found", http.StatusNotFound)
-			return
-		case errors.Is(err, streamers.ErrStreamerTimestampMismatch):
-			http.Error(w, "streamer createdAt mismatch", http.StatusConflict)
 			return
 		default:
 			if logger != nil {
@@ -87,18 +71,7 @@ func deleteStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"status":    "deleted",
-		"id":        id,
-		"createdAt": createdAt,
+		"status": "deleted",
+		"id":     id,
 	})
-}
-
-func isRFC3339(value string) bool {
-	if _, err := time.Parse(time.RFC3339Nano, value); err == nil {
-		return true
-	}
-	if _, err := time.Parse(time.RFC3339, value); err == nil {
-		return true
-	}
-	return false
 }
