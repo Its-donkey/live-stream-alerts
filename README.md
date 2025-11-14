@@ -91,17 +91,15 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
   ```json
   {
     "streamer": {
-      "id": "SharpenDev",
-      "createdAt": "2025-03-01T15:04:05Z"
+      "id": "SharpenDev"
     }
   }
   ```
-- **Notes:** Both the path parameter and `streamer.id` must match (case-insensitive), and `streamer.createdAt` must match the timestamp stored on the record (`time.RFC3339`). This serves as a safety check before deleting persisted data.
+- **Notes:** Both the path parameter and `streamer.id` must match (case-insensitive); the server no longer requires the `createdAt` timestamp.
 - **Responses:**
-  - `200 OK` with `{ "status": "deleted", "id": "...", "createdAt": "..." }` when the record is deleted.
+  - `200 OK` with `{ "status": "deleted", "id": "..." }` when the record is deleted.
   - `404 Not Found` if the ID does not match an existing streamer.
   - `400 Bad Request` when the ID segment is missing or the JSON body is invalid/mismatched.
-  - `409 Conflict` when the provided `createdAt` does not match the stored record.
   - `500 Internal Server Error` for unexpected persistence failures (also logged server-side).
 - **Handler coverage:** The same `/api/streamers` handler powers GET, POST, PATCH, and DELETE, so clients can reuse the base path and expect the `Allow: GET, POST, PATCH, DELETE` header on unsupported verbs.
 

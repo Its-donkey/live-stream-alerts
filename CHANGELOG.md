@@ -28,6 +28,7 @@
 - Documented the shared `/api/streamers` handler (README + Postman collection) so clients understand DELETE lives on the same base path as GET/POST and can rely on the `Allow` header.
 - Extracted the WebAssembly UI into a sibling project so this repository now focuses solely on the alert server APIs.
 - Renamed the metadata scraping endpoint to `/api/youtube/metadata` (including handler types) so the path and code align with what the endpoint returns.
+- Removed the `createdAt` requirement from `DELETE /api/streamers/{id}` so operators only need to provide the streamer ID when deleting records.
 - The subscribe handler now mirrors the hub's HTTP response (body/status) to the API client and falls back to the upstream status text when the hub omits a body.
 - Normalized all YouTube WebSub defaults (callback URL, lease duration, verification mode) inside the handler so clients can omit them safely.
 - Alert verification logging now includes the exact challenge response body so the terminal reflects what was sent back to YouTube.
