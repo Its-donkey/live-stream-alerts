@@ -40,3 +40,4 @@
 - Removed references to the deprecated `/api/youtube/new/subscribe` alias so the README only lists active endpoints.
 - Allow `DELETE /api/streamers/{id}` to accept RFC3339 timestamps with or without fractional seconds so clients can resend the stored `createdAt` value without losing precision.
 - Registered the consolidated `/api/streamers` handler in the router so DELETE requests (and the correct Allow header) are available to clients.
+- Added the missing list/delete handler implementations so the `/api/streamers` handler actually builds with GET/POST/DELETE support.
