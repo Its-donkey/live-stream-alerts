@@ -81,6 +81,14 @@ var (
 	ErrStreamerTimestampMismatch = errors.New("streamer createdAt does not match")
 )
 
+// UpdateFields describes the mutable streamer fields.
+type UpdateFields struct {
+	StreamerID  string
+	Alias       *string
+	Description *string
+	Languages   *[]string
+}
+
 // Append adds a new streamer record to disk and returns a copy with timestamps populated.
 func Append(path string, record Record) (Record, error) {
 	if path == "" {
@@ -146,6 +154,46 @@ func List(path string) ([]Record, error) {
 	records := make([]Record, len(fileData.Records))
 	copy(records, fileData.Records)
 	return records, nil
+}
+
+// Update applies modifications to an existing streamer.
+func Update(path string, fields UpdateFields) (Record, error) {
+	if path == "" {
+		return Record{}, errors.New("streamers file path is required")
+	}
+	id := strings.TrimSpace(fields.StreamerID)
+	if id == "" {
+		return Record{}, errors.New("streamer id is required")
+	}
+	if fields.Alias == nil && fields.Description == nil && fields.Languages == nil {
+		return Record{}, errors.New("no fields provided to update")
+	}
+
+	var updated Record
+	err := UpdateFile(path, func(file *File) error {
+		for i := range file.Records {
+			if !strings.EqualFold(file.Records[i].Streamer.ID, id) {
+				continue
+			}
+			if fields.Alias != nil {
+				file.Records[i].Streamer.Alias = *fields.Alias
+			}
+			if fields.Description != nil {
+				file.Records[i].Streamer.Description = *fields.Description
+			}
+			if fields.Languages != nil {
+				file.Records[i].Streamer.Languages = append([]string(nil), (*fields.Languages)...)
+			}
+			file.Records[i].UpdatedAt = time.Now().UTC()
+			updated = file.Records[i]
+			return nil
+		}
+		return fmt.Errorf("%w: %s", ErrStreamerNotFound, id)
+	})
+	if err != nil {
+		return Record{}, err
+	}
+	return updated, nil
 }
 
 // UpdateFile reads the streamers file, applies the provided mutation, and writes it back to disk atomically.

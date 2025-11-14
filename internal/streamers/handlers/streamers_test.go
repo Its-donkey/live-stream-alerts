@@ -223,6 +223,65 @@ func TestStreamersHandlerDeleteValidations(t *testing.T) {
 	})
 }
 
+func TestStreamersHandlerPatch(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "streamers.json")
+	record, err := streamers.Append(path, streamers.Record{
+		Streamer: streamers.Streamer{
+			ID:        "PatchMe",
+			Alias:     "PatchMe",
+			FirstName: "Pat",
+			LastName:  "Chable",
+			Email:     "patch@example.com",
+		},
+	})
+	if err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	handler := StreamersHandler(StreamOptions{FilePath: path})
+
+	t.Run("success", func(t *testing.T) {
+		payload := map[string]any{
+			"streamer": map[string]any{
+				"id":          record.Streamer.ID,
+				"alias":       "New Alias",
+				"description": "Updated description",
+				"languages":   []string{"English"},
+			},
+		}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPatch, "/api/streamers", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rr.Code)
+		}
+		if !bytes.Contains(rr.Body.Bytes(), []byte("New Alias")) {
+			t.Fatalf("expected updated alias in response")
+		}
+	})
+
+	t.Run("missing fields", func(t *testing.T) {
+		payload := map[string]any{
+			"streamer": map[string]any{
+				"id": record.Streamer.ID,
+			},
+		}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPatch, "/api/streamers", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for missing fields, got %d", rr.Code)
+		}
+	})
+}
+
 func TestStreamersHandlerMethodNotAllowed(t *testing.T) {
 	handler := StreamersHandler(StreamOptions{})
 	req := httptest.NewRequest(http.MethodPut, "/api/streamers", nil)
@@ -233,7 +292,7 @@ func TestStreamersHandlerMethodNotAllowed(t *testing.T) {
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected 405, got %d", rr.Code)
 	}
-	if allow := rr.Header().Get("Allow"); allow != "GET, POST, DELETE" {
+	if allow := rr.Header().Get("Allow"); allow != "GET, POST, PATCH, DELETE" {
 		t.Fatalf("expected Allow header to advertise supported methods, got %q", allow)
 	}
 }

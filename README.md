@@ -24,6 +24,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 | POST   | `/api/youtube/channel`       | Resolves a YouTube `@handle` into its canonical channel ID. |
 | GET    | `/api/streamers`             | Returns every stored streamer record. |
 | POST   | `/api/streamers`             | Persists streamer metadata to `data/streamers.json`. |
+| PATCH  | `/api/streamers`             | Updates the alias/description/languages of an existing streamer. |
 | DELETE | `/api/streamers/{id}`        | Removes a stored streamer record. |
 | POST   | `/api/youtube/metadata`     | Scrapes a public URL and returns its meta description/title. |
 | GET    | `/api/server/config`         | Returns the server runtime information consumed by the UI. |
@@ -102,7 +103,23 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
   - `400 Bad Request` when the ID segment is missing or the JSON body is invalid/mismatched.
   - `409 Conflict` when the provided `createdAt` does not match the stored record.
   - `500 Internal Server Error` for unexpected persistence failures (also logged server-side).
-- **Handler coverage:** The same `/api/streamers` handler powers GET, POST, and DELETE, so clients can reuse the base path and expect the `Allow: GET, POST, DELETE` header on unsupported verbs.
+- **Handler coverage:** The same `/api/streamers` handler powers GET, POST, PATCH, and DELETE, so clients can reuse the base path and expect the `Allow: GET, POST, PATCH, DELETE` header on unsupported verbs.
+
+### PATCH `/api/streamers`
+- **Purpose:** Partially updates an existing streamer identified by `streamer.id`, allowing operators to refresh the alias, description, or languages without recreating the record.
+- **Request body:** Provide the ID plus any mutable fields:
+  ```json
+  {
+    "streamer": {
+      "id": "SharpenDev",
+      "alias": "Sharpen Dev",
+      "description": "Sharper knives every Wednesday.",
+      "languages": ["English", "Japanese"]
+    }
+  }
+  ```
+- **Validation:** `streamer.id` is required. Alias cannot be blank when supplied. Languages reuse the same allow-list/duplicate trimming as the create endpoint; invalid values return `400 Bad Request`. At least one mutable field must be present.
+- **Response:** `200 OK` with the updated streamer record echoed back. `404 Not Found` is returned if the ID does not exist.
 
 ### GET `/api/server/config`
 - **Purpose:** Exposes runtime metadata consumed by companion tooling (including the standalone UI).

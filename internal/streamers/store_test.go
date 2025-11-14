@@ -117,6 +117,63 @@ func TestListValidatesPath(t *testing.T) {
 	}
 }
 
+func TestUpdate(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "streamers.json")
+	record, err := Append(path, Record{
+		Streamer: Streamer{
+			ID:        "OriginalID",
+			Alias:     "Original",
+			FirstName: "First",
+			LastName:  "Last",
+			Email:     "user@example.com",
+		},
+	})
+	if err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	newAlias := "Updated Alias"
+	desc := "Updated description"
+	langs := []string{"English", "Japanese"}
+
+	updated, err := Update(path, UpdateFields{
+		StreamerID:  record.Streamer.ID,
+		Alias:       &newAlias,
+		Description: &desc,
+		Languages:   &langs,
+	})
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if updated.Streamer.Alias != newAlias {
+		t.Fatalf("alias not updated, got %q", updated.Streamer.Alias)
+	}
+	if updated.Streamer.Description != desc {
+		t.Fatalf("description not updated")
+	}
+	if len(updated.Streamer.Languages) != len(langs) {
+		t.Fatalf("languages not updated")
+	}
+	if updated.UpdatedAt.Equal(record.UpdatedAt) {
+		t.Fatalf("expected updatedAt to change")
+	}
+
+	_, err = Update(path, UpdateFields{StreamerID: "missing", Alias: &newAlias})
+	if !errors.Is(err, ErrStreamerNotFound) {
+		t.Fatalf("expected not found error, got %v", err)
+	}
+	if _, err := Update("", UpdateFields{StreamerID: "id", Alias: &newAlias}); err == nil {
+		t.Fatalf("expected path validation error")
+	}
+	if _, err := Update(path, UpdateFields{}); err == nil {
+		t.Fatalf("expected error for missing fields and id")
+	}
+	if _, err := Update(path, UpdateFields{StreamerID: "id"}); err == nil {
+		t.Fatalf("expected error for no fields to update")
+	}
+}
+
 func TestReadFileError(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "file.json")
