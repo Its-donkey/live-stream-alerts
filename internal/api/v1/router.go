@@ -44,7 +44,7 @@ func NewRouter(opts Options) http.Handler {
 	mux.Handle("/api/streamers", streamersHandler)
 	mux.Handle("/api/streamers/", streamersHandler)
 
-	mux.Handle("/api/youtube/description", youtubehandlers.NewDescriptionHandler(youtubehandlers.DescriptionHandlerOptions{}))
+	mux.Handle("/api/youtube/metadata", youtubehandlers.NewMetadataHandler(youtubehandlers.MetadataHandlerOptions{}))
 
 	mux.HandleFunc("/api/server/config", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, opts.RuntimeInfo)

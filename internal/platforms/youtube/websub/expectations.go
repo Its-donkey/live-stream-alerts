@@ -16,6 +16,9 @@ type Expectation struct {
 	LeaseSeconds int
 	Secret       string
 	ChannelID    string
+	Alias        string
+	HubStatus    string
+	HubBody      string
 }
 
 var (
@@ -61,6 +64,27 @@ func ConsumeExpectation(token string) (Expectation, bool) {
 func CancelExpectation(token string) {
 	mu.Lock()
 	delete(expectations, token)
+	mu.Unlock()
+}
+
+// RecordSubscriptionResult stores data about the hub response so callers can log later.
+func RecordSubscriptionResult(token, alias, topic, status, body string) {
+	if token == "" {
+		return
+	}
+	mu.Lock()
+	exp, ok := expectations[token]
+	if ok {
+		if alias != "" {
+			exp.Alias = alias
+		}
+		if topic != "" {
+			exp.Topic = topic
+		}
+		exp.HubStatus = status
+		exp.HubBody = body
+		expectations[token] = exp
+	}
 	mu.Unlock()
 }
 

@@ -57,12 +57,8 @@ func TestSubscribeSuccess(t *testing.T) {
 			Handle:    "@test",
 		}},
 	}
-	logger := &capturingLogger{}
-	if err := Subscribe(context.Background(), record, Options{Client: hub.Client(), HubURL: hub.URL, Logger: logger}); err != nil {
+	if err := Subscribe(context.Background(), record, Options{Client: hub.Client(), HubURL: hub.URL}); err != nil {
 		t.Fatalf("subscribe returned error: %v", err)
-	}
-	if len(logger.messages) == 0 {
-		t.Fatalf("expected log entry")
 	}
 }
 

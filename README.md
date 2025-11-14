@@ -25,7 +25,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 | GET    | `/api/streamers`             | Returns every stored streamer record. |
 | POST   | `/api/streamers`             | Persists streamer metadata to `data/streamers.json`. |
 | DELETE | `/api/streamers/{id}`        | Removes a stored streamer record. |
-| POST   | `/api/metadata/description`  | Scrapes a public URL and returns its meta description/title. |
+| POST   | `/api/youtube/metadata`     | Scrapes a public URL and returns its meta description/title. |
 | GET    | `/api/server/config`         | Returns the server runtime information consumed by the UI. |
 
 ### GET `/alerts`
@@ -116,8 +116,8 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
   }
   ```
 
-### POST `/api/metadata/description`
-- **Purpose:** Returns the `<meta name="description">` (or OpenGraph description) for a supplied public URL so tooling can pre-fill streamer descriptions, display names, and YouTube identifiers.
+### POST `/api/youtube/metadata`
+- **Purpose:** Returns the `<meta name="description">` (or OpenGraph description) plus related channel metadata for a supplied public URL so tooling can pre-fill streamer descriptions, display names, and YouTube identifiers.
 - **Request body:**
   ```json
   {

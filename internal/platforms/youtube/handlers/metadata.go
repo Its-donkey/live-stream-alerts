@@ -13,26 +13,26 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-// DescriptionRequest describes the payload for fetching metadata.
-type DescriptionRequest struct {
+// MetadataRequest describes the payload for fetching metadata.
+type MetadataRequest struct {
 	URL string `json:"url"`
 }
 
-// DescriptionResponse represents the metadata information returned to the client.
-type DescriptionResponse struct {
+// MetadataResponse represents the metadata information returned to the client.
+type MetadataResponse struct {
 	Description string `json:"description"`
 	Title       string `json:"title"`
 	Handle      string `json:"handle"`
 	ChannelID   string `json:"channelId"`
 }
 
-// DescriptionHandlerOptions configures the description handler.
-type DescriptionHandlerOptions struct {
+// MetadataHandlerOptions configures the metadata handler.
+type MetadataHandlerOptions struct {
 	Client *http.Client
 }
 
-// NewDescriptionHandler returns an http.Handler that fetches the description of a given URL.
-func NewDescriptionHandler(opts DescriptionHandlerOptions) http.Handler {
+// NewMetadataHandler returns an http.Handler that fetches metadata for a given URL.
+func NewMetadataHandler(opts MetadataHandlerOptions) http.Handler {
 	client := opts.Client
 	if client == nil {
 		client = &http.Client{Timeout: 5 * time.Second}
@@ -46,7 +46,7 @@ func NewDescriptionHandler(opts DescriptionHandlerOptions) http.Handler {
 		}
 
 		defer r.Body.Close()
-		var req DescriptionRequest
+		var req MetadataRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid JSON body", http.StatusBadRequest)
 			return
@@ -62,14 +62,14 @@ func NewDescriptionHandler(opts DescriptionHandlerOptions) http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		desc, title, handle, channelID, err := fetchDescription(ctx, client, parsed.String())
+		desc, title, handle, channelID, err := fetchMetadata(ctx, client, parsed.String())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(DescriptionResponse{
+		_ = json.NewEncoder(w).Encode(MetadataResponse{
 			Description: desc,
 			Title:       title,
 			Handle:      handle,
@@ -78,7 +78,7 @@ func NewDescriptionHandler(opts DescriptionHandlerOptions) http.Handler {
 	})
 }
 
-func fetchDescription(ctx context.Context, client *http.Client, target string) (string, string, string, string, error) {
+func fetchMetadata(ctx context.Context, client *http.Client, target string) (string, string, string, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return "", "", "", "", err

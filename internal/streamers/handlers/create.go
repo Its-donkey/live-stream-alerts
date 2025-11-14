@@ -6,92 +6,41 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"time"
 	"unicode"
 
 	"live-stream-alerts/internal/logging"
-	youtubesubscriptions "live-stream-alerts/internal/platforms/youtube/subscriptions"
+	"live-stream-alerts/internal/platforms/youtube/onboarding"
 	"live-stream-alerts/internal/streamers"
 )
 
-// CreateOptions configures the streamer handler.
-type CreateOptions struct {
-	FilePath      string
-	Logger        logging.Logger
-	YouTubeClient *http.Client
-	YouTubeHubURL string
-}
-
-// NewCreateHandler returns a handler for GET/POST /api/v1/streamers.
-func NewCreateHandler(opts CreateOptions) http.Handler {
-	path := opts.FilePath
-	if path == "" {
-		path = streamers.DefaultFilePath
-	}
-	path = filepath.Clean(path)
-
-	youtubeClient := opts.YouTubeClient
-	if youtubeClient == nil {
-		youtubeClient = &http.Client{Timeout: 10 * time.Second}
-	}
-	youtubeHubURL := strings.TrimSpace(opts.YouTubeHubURL)
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			listStreamers(w, path, opts.Logger)
-			return
-		case http.MethodPost:
-			createStreamer(w, r, path, opts.Logger, youtubeClient, youtubeHubURL)
-			return
-		default:
-			w.Header().Set("Allow", fmt.Sprintf("%s, %s", http.MethodGet, http.MethodPost))
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-	})
-}
-
-func listStreamers(w http.ResponseWriter, path string, logger logging.Logger) {
-	records, err := streamers.List(path)
-	if err != nil {
-		if logger != nil {
-			logger.Printf("failed to list streamers: %v", err)
-		}
-		http.Error(w, "failed to read streamer data", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	response := struct {
-		Streamers []streamers.Record `json:"streamers"`
-	}{
-		Streamers: records,
-	}
-	if err := json.NewEncoder(w).Encode(response); err != nil && logger != nil {
-		logger.Printf("failed to encode streamers response: %v", err)
-	}
+type createRequest struct {
+	Streamer struct {
+		Alias       string   `json:"alias"`
+		Description string   `json:"description"`
+		Languages   []string `json:"languages"`
+	} `json:"streamer"`
+	Platforms struct {
+		URL string `json:"url"`
+	} `json:"platforms"`
 }
 
 func createStreamer(w http.ResponseWriter, r *http.Request, path string, logger logging.Logger, youtubeClient *http.Client, youtubeHubURL string) {
 	defer r.Body.Close()
-	var req streamers.Record
+	var req createRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid JSON body", http.StatusBadRequest)
 		return
 	}
 
-	if err := validateRecord(&req); err != nil {
+	record, err := buildRecord(req)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	req.CreatedAt = time.Time{}
-	req.UpdatedAt = time.Time{}
-
-	record, err := streamers.Append(path, req)
+	record, err = streamers.Append(path, record)
 	if err != nil {
 		if errors.Is(err, streamers.ErrDuplicateStreamerID) {
 			http.Error(w, "a streamer with that alias already exists", http.StatusConflict)
@@ -108,45 +57,51 @@ func createStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(record)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-	subscribeOpts := youtubesubscriptions.Options{
-		Client: youtubeClient,
-		HubURL: youtubeHubURL,
-		Logger: logger,
+	channelURL := strings.TrimSpace(req.Platforms.URL)
+	if channelURL == "" {
+		return
 	}
-	if err := youtubesubscriptions.Subscribe(ctx, record, subscribeOpts); err != nil && logger != nil {
-		logger.Printf("failed to subscribe YouTube alerts for %s: %v", record.Streamer.Alias, err)
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	onboardOpts := onboarding.Options{
+		Client:        youtubeClient,
+		HubURL:        youtubeHubURL,
+		Logger:        logger,
+		StreamersPath: path,
+	}
+	if err := onboarding.FromURL(ctx, record, channelURL, onboardOpts); err != nil && logger != nil {
+		logger.Printf("failed to process YouTube URL for %s: %v", record.Streamer.Alias, err)
 	}
 }
 
-func validateRecord(record *streamers.Record) error {
-	record.Streamer.Alias = strings.TrimSpace(record.Streamer.Alias)
-	record.Streamer.FirstName = strings.TrimSpace(record.Streamer.FirstName)
-	record.Streamer.LastName = strings.TrimSpace(record.Streamer.LastName)
-	record.Streamer.Email = strings.TrimSpace(record.Streamer.Email)
-	if record.Streamer.Alias == "" {
-		return fmt.Errorf("streamer.alias is required")
+func buildRecord(req createRequest) (streamers.Record, error) {
+	alias := strings.TrimSpace(req.Streamer.Alias)
+	if alias == "" {
+		return streamers.Record{}, fmt.Errorf("streamer.alias is required")
 	}
-	if sanitised := sanitiseAliasForID(record.Streamer.Alias); sanitised == "" {
-		return fmt.Errorf("streamer.alias must contain at least one letter or digit")
-	} else {
-		record.Streamer.ID = sanitised
+	streamerID := sanitiseAliasForID(alias)
+	if streamerID == "" {
+		return streamers.Record{}, fmt.Errorf("streamer.alias must contain at least one letter or digit")
 	}
 
-	languages, err := sanitiseLanguages(record.Streamer.Languages)
+	langs, err := sanitiseLanguages(req.Streamer.Languages)
 	if err != nil {
-		return err
+		return streamers.Record{}, err
 	}
-	record.Streamer.Languages = languages
 
-	if record.Platforms.YouTube != nil {
-		record.Platforms.YouTube.Handle = strings.TrimSpace(record.Platforms.YouTube.Handle)
-		if record.Platforms.YouTube.Handle == "" {
-			return fmt.Errorf("platforms.youtube.handle is required when youtube is provided")
-		}
+	record := streamers.Record{
+		Streamer: streamers.Streamer{
+			ID:          streamerID,
+			Alias:       alias,
+			Description: strings.TrimSpace(req.Streamer.Description),
+			Languages:   langs,
+		},
+		Platforms: streamers.Platforms{},
 	}
-	return nil
+
+	return record, nil
 }
 
 func sanitiseAliasForID(alias string) string {

@@ -31,7 +31,7 @@ func TestSubscribeYouTubeSuccess(t *testing.T) {
 	defer hub.Close()
 
 	req := YouTubeRequest{Topic: "https://example", Callback: hub.URL, Verify: "async", VerifyToken: "token", ChannelID: "UC1"}
-	resp, body, err := SubscribeYouTube(context.Background(), hub.Client(), hub.URL, req)
+	resp, body, finalReq, err := SubscribeYouTube(context.Background(), hub.Client(), hub.URL, req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -41,17 +41,17 @@ func TestSubscribeYouTubeSuccess(t *testing.T) {
 	if string(body) != "ok" {
 		t.Fatalf("unexpected body %q", string(body))
 	}
-	if _, ok := websub.LookupExpectation(req.VerifyToken); !ok {
+	if _, ok := websub.LookupExpectation(finalReq.VerifyToken); !ok {
 		t.Fatalf("expected expectation to be registered")
 	}
-	websub.CancelExpectation(req.VerifyToken)
+	websub.CancelExpectation(finalReq.VerifyToken)
 }
 
 func TestSubscribeYouTubeValidatesInputs(t *testing.T) {
-	if _, _, err := SubscribeYouTube(context.Background(), nil, "", YouTubeRequest{}); err == nil {
+	if _, _, _, err := SubscribeYouTube(context.Background(), nil, "", YouTubeRequest{}); err == nil {
 		t.Fatalf("expected error for missing hub url")
 	}
-	if _, _, err := SubscribeYouTube(context.Background(), nil, "http://hub", YouTubeRequest{}); err == nil {
+	if _, _, _, err := SubscribeYouTube(context.Background(), nil, "http://hub", YouTubeRequest{}); err == nil {
 		t.Fatalf("expected error for missing topic")
 	}
 }
@@ -64,7 +64,7 @@ func TestSubscribeYouTubePropagatesHubErrors(t *testing.T) {
 	defer hub.Close()
 
 	req := YouTubeRequest{Topic: "https://example", Callback: hub.URL, Verify: "async", VerifyToken: "token"}
-	resp, body, err := SubscribeYouTube(context.Background(), hub.Client(), hub.URL, req)
+	resp, body, _, err := SubscribeYouTube(context.Background(), hub.Client(), hub.URL, req)
 	if err == nil {
 		t.Fatalf("expected error for non-2xx response")
 	}

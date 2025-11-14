@@ -10,7 +10,7 @@
 - Added `streamer.description` to the schema and storage model so submissions can describe what makes each streamer unique.
 - Derived `streamer.id` from the alias by stripping whitespace/punctuation and tightened the schema to enforce alphanumeric IDs.
 - Reject duplicate streamer aliases by enforcing unique cleaned IDs during persistence and documenting the resulting `409 Conflict` behavior.
-- Added `/api/metadata/description` so tooling can fetch channel summaries and auto-fill the description/name/YouTube handle fields when a URL is entered.
+- Added `/api/youtube/metadata` so tooling can fetch channel summaries and auto-fill the description/name/YouTube handle fields when a URL is entered.
 - Added `streamer.languages` to the schema/storage plus validation so submissions only include supported language codes.
 - Automatically subscribes YouTube channels (via PubSubHubbub) whenever a newly created streamer includes YouTube platform data, resolving channel IDs from handles when needed.
 - Added a JSON schema (`schema/streamers.schema.json`) and typed storage layer for streamers so data persists with server-managed IDs and timestamps.
@@ -26,6 +26,7 @@
 - Dropped the `/v1` segment from every public API path (for example, `/api/v1/streamers` is now `/api/streamers`) to simplify client integrations.
 - Documented the shared `/api/streamers` handler (README + Postman collection) so clients understand DELETE lives on the same base path as GET/POST and can rely on the `Allow` header.
 - Extracted the WebAssembly UI into a sibling project so this repository now focuses solely on the alert server APIs.
+- Renamed the metadata scraping endpoint to `/api/youtube/metadata` (including handler types) so the path and code align with what the endpoint returns.
 - The subscribe handler now mirrors the hub's HTTP response (body/status) to the API client and falls back to the upstream status text when the hub omits a body.
 - Normalized all YouTube WebSub defaults (callback URL, lease duration, verification mode) inside the handler so clients can omit them safely.
 - Alert verification logging now includes the exact challenge response body so the terminal reflects what was sent back to YouTube.
@@ -41,7 +42,7 @@
 - Allow `DELETE /api/streamers/{id}` to accept RFC3339 timestamps with or without fractional seconds so clients can resend the stored `createdAt` value without losing precision.
 - Registered the consolidated `/api/streamers` handler in the router so DELETE requests (and the correct Allow header) are available to clients.
 - Added the missing list/delete handler implementations so the `/api/streamers` handler actually builds with GET/POST/DELETE support.
-- Restored the YouTube metadata handler import so `/api/metadata/description` compiles and keeps using the dedicated scraping package.
+- Restored the YouTube metadata handler import so `/api/youtube/metadata` compiles and keeps using the dedicated scraping package.
 - Registered `/api/streamers/` alongside `/api/streamers` so DELETE requests to `/api/streamers/{id}` reach the handler instead of 404ing.
 - Restored the previous subscribe defaulting behavior so `NormaliseSubscribeRequest` only fills in blank fields, allowing clients to override callback/hub/verify/lease values.
 - DELETE `/api/streamers/{id}` now validates `streamer.createdAt` locally so malformed timestamps return `400 Bad Request` instead of surfacing as `500` errors.

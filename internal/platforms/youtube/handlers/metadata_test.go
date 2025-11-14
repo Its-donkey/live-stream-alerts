@@ -9,17 +9,17 @@ import (
 	"testing"
 )
 
-func TestNewDescriptionHandlerSuccess(t *testing.T) {
+func TestNewMetadataHandlerSuccess(t *testing.T) {
 	html := `<!doctype html><html><head><meta name="description" content="Desc"><meta property="og:title" content="Title"><meta property="og:url" content="https://www.youtube.com/@example"><meta itemprop="channelId" content="UC999"></head></html>`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(html))
 	}))
 	t.Cleanup(server.Close)
 
-	handler := NewDescriptionHandler(DescriptionHandlerOptions{Client: server.Client()})
+	handler := NewMetadataHandler(MetadataHandlerOptions{Client: server.Client()})
 
-	body, _ := json.Marshal(DescriptionRequest{URL: server.URL})
-	req := httptest.NewRequest(http.MethodPost, "/api/metadata/description", bytes.NewReader(body))
+	body, _ := json.Marshal(MetadataRequest{URL: server.URL})
+	req := httptest.NewRequest(http.MethodPost, "/api/youtube/metadata", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -27,7 +27,7 @@ func TestNewDescriptionHandlerSuccess(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
-	var resp DescriptionResponse
+	var resp MetadataResponse
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -36,8 +36,8 @@ func TestNewDescriptionHandlerSuccess(t *testing.T) {
 	}
 }
 
-func TestNewDescriptionHandlerValidatesInput(t *testing.T) {
-	handler := NewDescriptionHandler(DescriptionHandlerOptions{})
+func TestNewMetadataHandlerValidatesInput(t *testing.T) {
+	handler := NewMetadataHandler(MetadataHandlerOptions{})
 
 	t.Run("method", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -58,7 +58,7 @@ func TestNewDescriptionHandlerValidatesInput(t *testing.T) {
 	})
 
 	t.Run("invalid URL", func(t *testing.T) {
-		payload, _ := json.Marshal(DescriptionRequest{URL: "ftp://example"})
+		payload, _ := json.Marshal(MetadataRequest{URL: "ftp://example"})
 		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(payload))
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -68,14 +68,14 @@ func TestNewDescriptionHandlerValidatesInput(t *testing.T) {
 	})
 }
 
-func TestFetchDescriptionParsesContent(t *testing.T) {
+func TestFetchMetadataParsesContent(t *testing.T) {
 	html := `<!doctype html><html><head><title>Alt</title><meta property="og:url" content="https://youtube.com/@other"><link rel="canonical" href="https://youtube.com/channel/UC111"><meta itemprop="channelId" content="UC111"></head></html>`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(html))
 	}))
 	defer server.Close()
 
-	desc, title, handle, channelID, err := fetchDescription(context.Background(), server.Client(), server.URL)
+	desc, title, handle, channelID, err := fetchMetadata(context.Background(), server.Client(), server.URL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
