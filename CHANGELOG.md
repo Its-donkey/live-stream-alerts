@@ -4,6 +4,7 @@
 ### Added
 - Introduced the v1 HTTP router with request-dump logging so every inbound request is captured alongside the YouTube alert verification endpoint.
 - Added the `/api/youtube/subscribe` proxy that forwards JSON payloads to the YouTube PubSubHubbub hub while applying the required defaults.
+- Added the `/api/youtube/unsubscribe` endpoint so operators can stop receiving hub callbacks for a topic without editing configs manually.
 - Added the `/api/youtube/channel` lookup endpoint to convert @handles into canonical UC channel IDs.
 - Added POST `/api/streamers` to persist streamer metadata into `data/streamers.json` for multi-platform support.
 - Added GET `/api/streamers` so clients can list every stored streamer record.

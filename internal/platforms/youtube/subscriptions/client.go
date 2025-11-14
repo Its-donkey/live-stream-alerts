@@ -46,6 +46,15 @@ func NormaliseSubscribeRequest(req *YouTubeRequest) {
 	req.LeaseSeconds = DefaultLease
 }
 
+// NormaliseUnsubscribeRequest applies the enforced defaults for unsubscribe flows.
+func NormaliseUnsubscribeRequest(req *YouTubeRequest) {
+	req.HubURL = DefaultHubURL
+	req.Callback = DefaultCallbackURL
+	req.Mode = "unsubscribe"
+	req.Verify = DefaultVerify
+	req.LeaseSeconds = DefaultLease
+}
+
 // SubscribeYouTube executes a WebSub subscription call against the provided hub URL.
 // Fields expected:
 //   - Topic, Callback, Mode, Verify, VerifyToken, Secret, LeaseSeconds
