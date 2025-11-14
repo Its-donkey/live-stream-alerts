@@ -7,6 +7,7 @@
 - Added the `/api/youtube/channel` lookup endpoint to convert @handles into canonical UC channel IDs.
 - Added POST `/api/streamers` to persist streamer metadata into `data/streamers.json` for multi-platform support.
 - Added GET `/api/streamers` so clients can list every stored streamer record.
+- Added PATCH `/api/streamers` so existing streamer aliases/descriptions/languages can be updated without recreating the record.
 - Added `streamer.description` to the schema and storage model so submissions can describe what makes each streamer unique.
 - Derived `streamer.id` from the alias by stripping whitespace/punctuation and tightened the schema to enforce alphanumeric IDs.
 - Reject duplicate streamer aliases by enforcing unique cleaned IDs during persistence and documenting the resulting `409 Conflict` behavior.
