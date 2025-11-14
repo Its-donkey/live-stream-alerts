@@ -1,0 +1,104 @@
+// file name — /internal/streamers/handlers/delete.go
+package handlers
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strings"
+	"time"
+
+	"live-stream-alerts/internal/logging"
+	"live-stream-alerts/internal/streamers"
+)
+
+type deleteRequest struct {
+	Streamer struct {
+		ID        string `json:"id"`
+		CreatedAt string `json:"createdAt"`
+	} `json:"streamer"`
+}
+
+func deleteStreamer(w http.ResponseWriter, r *http.Request, path string, logger logging.Logger) {
+	// Enforce method (defensive check; switch already filtered by method)
+	if r.Method != http.MethodDelete {
+		w.Header().Set("Allow", http.MethodDelete)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract ID from URL: /api/streamers/{id}
+	id := strings.TrimPrefix(r.URL.Path, "/api/streamers/")
+	id = strings.TrimSpace(strings.Trim(id, "/"))
+	if id == "" {
+		http.Error(w, "streamer id is required in path", http.StatusBadRequest)
+		return
+	}
+
+	// Parse JSON body
+	defer r.Body.Close()
+	var body deleteRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate body.id
+	bodyID := strings.TrimSpace(body.Streamer.ID)
+	if bodyID == "" {
+		http.Error(w, "streamer.id is required in body", http.StatusBadRequest)
+		return
+	}
+	if !strings.EqualFold(bodyID, id) {
+		http.Error(w, "streamer.id mismatch between path and body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate createdAt
+	createdAt := strings.TrimSpace(body.Streamer.CreatedAt)
+	if createdAt == "" {
+		http.Error(w, "streamer.createdAt is required", http.StatusBadRequest)
+		return
+	}
+	if !isRFC3339(createdAt) {
+		http.Error(w, "streamer.createdAt must be a valid RFC3339 timestamp", http.StatusBadRequest)
+		return
+	}
+
+	// Perform delete via streamers.Delete
+	if err := streamers.Delete(path, id, createdAt); err != nil {
+		switch {
+		case errors.Is(err, streamers.ErrStreamerNotFound):
+			http.Error(w, "streamer not found", http.StatusNotFound)
+			return
+		case errors.Is(err, streamers.ErrStreamerTimestampMismatch):
+			http.Error(w, "streamer createdAt mismatch", http.StatusConflict)
+			return
+		default:
+			if logger != nil {
+				logger.Printf("failed to delete streamer %s: %v", id, err)
+			}
+			http.Error(w, "failed to delete streamer", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Success
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status":    "deleted",
+		"id":        id,
+		"createdAt": createdAt,
+	})
+}
+
+func isRFC3339(value string) bool {
+	if _, err := time.Parse(time.RFC3339Nano, value); err == nil {
+		return true
+	}
+	if _, err := time.Parse(time.RFC3339, value); err == nil {
+		return true
+	}
+	return false
+}

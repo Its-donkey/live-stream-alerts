@@ -32,11 +32,14 @@ func TestSubscribeSkipsWhenNoYouTubePlatform(t *testing.T) {
 }
 
 func TestSubscribeValidatesChannelID(t *testing.T) {
+	rt := mockRoundTrip(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusBadRequest, Body: io.NopCloser(strings.NewReader("fail")), Header: make(http.Header)}, nil
+	})
 	record := streamers.Record{
 		Streamer:  streamers.Streamer{Alias: "Test"},
 		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{Handle: "@test"}},
 	}
-	if err := Subscribe(context.Background(), record, Options{}); err == nil {
+	if err := Subscribe(context.Background(), record, Options{Client: &http.Client{Transport: rt}}); err == nil {
 		t.Fatalf("expected error when channel id cannot be resolved")
 	}
 }

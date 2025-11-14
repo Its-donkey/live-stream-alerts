@@ -20,19 +20,20 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 | Method | Path                         | Description |
 | ------ | ---------------------------- | ----------- |
 | GET    | `/alerts`                    | Responds to YouTube PubSubHubbub verification challenges. |
-| POST   | `/api/v1/youtube/subscribe`  | Proxies subscription requests to YouTube's hub after enforcing defaults. |
-| POST   | `/api/v1/youtube/channel`    | Resolves a YouTube `@handle` into its canonical channel ID. |
-| GET    | `/api/v1/streamers`          | Returns every stored streamer record. |
-| POST   | `/api/v1/streamers`          | Persists streamer metadata to `data/streamers.json`. |
-| POST   | `/api/v1/metadata/description` | Scrapes a public URL and returns its meta description/title. |
-| GET    | `/api/v1/server/config`      | Returns the server runtime information consumed by the UI. |
+| POST   | `/api/youtube/subscribe`     | Proxies subscription requests to YouTube's hub after enforcing defaults. |
+| POST   | `/api/youtube/channel`       | Resolves a YouTube `@handle` into its canonical channel ID. |
+| GET    | `/api/streamers`             | Returns every stored streamer record. |
+| POST   | `/api/streamers`             | Persists streamer metadata to `data/streamers.json`. |
+| DELETE | `/api/streamers/{id}`        | Removes a stored streamer record. |
+| POST   | `/api/metadata/description`  | Scrapes a public URL and returns its meta description/title. |
+| GET    | `/api/server/config`         | Returns the server runtime information consumed by the UI. |
 
 ### GET `/alerts`
 - **Purpose:** Handles `hub.challenge` callbacks from YouTube during WebSub verification.
 - **Query parameters:** `hub.mode`, `hub.topic`, `hub.lease_seconds`, `hub.verify_token`, and **required** `hub.challenge`.
 - **Response:** `200 OK` with the challenge echoed as plain text when successful; `400 Bad Request` if the challenge is missing.
 
-### POST `/api/v1/youtube/subscribe`
+### POST `/api/youtube/subscribe`
 - **Purpose:** Submits an application/x-www-form-urlencoded request to YouTube's hub (`https://pubsubhubbub.appspot.com/subscribe`).
 - **Request body:** JSON matching `internal/platforms/youtube/subscriptions.YouTubeRequest`:
   - `topic` (required): full feed URL to subscribe to.
@@ -44,7 +45,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
   - `leaseSeconds` falls back to `864000` (10 days) when omitted.
 - **Response:** Mirrors the upstream hub's status code, headers, and body. When the hub omits a body, the handler writes the upstream status text.
 
-### POST `/api/v1/youtube/channel`
+### POST `/api/youtube/channel`
 - **Purpose:** Converts a YouTube `@handle` into a canonical `UC...` channel ID by calling YouTube Data APIs via `ResolveChannelID`.
 - **Request body:**
   ```json
@@ -57,40 +58,53 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
   - `400 Bad Request` if `handle` is missing.
   - `502 Bad Gateway` if channel resolution fails.
 
-### GET `/api/v1/streamers`
+### GET `/api/streamers`
 - **Purpose:** Lists every persisted streamer record so the UI or tooling can inspect the latest state.
 - **Response:** `200 OK` with `{ "streamers": [ ...records... ] }`.
 - **Notes:** Records mirror the schema in `schema/streamers.schema.json`, including platform metadata and server-managed timestamps.
 
-### POST `/api/v1/streamers`
+### POST `/api/streamers`
 - **Purpose:** Appends a streamer record to `data/streamers.json` using the schema in `schema/streamers.schema.json`.
-- **Request body:** JSON that includes a `streamer` object (alias, first/last name, email, optional location) plus per-platform configuration:
+- **Request body:** Provide the streamer basics plus a single YouTube URL. The server derives the streamer ID, resolves the channel handle/ID, stores those fields, and subscribes to hub notifications:
   ```json
   {
     "streamer": {
       "alias": "SharpenDev",
       "description": "Tantalum chef knife maker focusing on live sharpening Q&A.",
-      "languages": ["English", "Japanese"],
-      "firstName": "Jane",
-      "lastName": "Doe",
-      "email": "jane@example.com"
+      "languages": ["English"]
     },
     "platforms": {
-      "youtube": {
-        "handle": "@SharpenDev",
-        "channelId": "UCabc123",
-        "hubSecret": "..."
-      }
+      "url": "https://www.youtube.com/@SharpenDev"
     }
   }
   ```
-- **Server-managed fields:** `streamer.id` is derived from the alias by removing whitespace, punctuation, and other non-alphanumeric characters. Incoming IDs, `createdAt`, and `updatedAt` values are ignored; timestamps are injected when the record is stored. Companion tooling (for example, the standalone UI) automatically calls `/api/v1/metadata/description` to pre-fill `streamer.description`, the streamer’s display name, and the YouTube handle/channelId/hubSecret when a channel URL is entered.
-- **YouTube subscriptions:** When `platforms.youtube` is supplied, the server resolves the channel ID if necessary and automatically calls the YouTube WebSub hub to subscribe for alerts using the stored hub secret. Failures are logged but do not block the request.
+- **Server-managed fields:** `streamer.id` is derived from the alias by stripping non-alphanumeric characters. IDs, timestamps, and platform metadata are set by the server. Once the record is created it is immediately enriched with the channel handle and ID taken from the supplied URL (or by resolving the @handle), and the backend generates a fresh hub secret that it later uses for WebSub HMAC validation.
+- **YouTube subscriptions:** After the record is stored the backend resolves any missing channel metadata, saves it back to `data/streamers.json`, and issues the PubSubHubbub subscription. Failures are logged but do not block the initial `201 Created` response.
 - **Languages:** When provided, entries must come from the supported language list (see `schema/streamers.schema.json`); duplicates and blank values are rejected.
-- **Validation:** `streamer.alias` must be non-empty and unique once cleaned (submitting a duplicate alias returns `409 Conflict`). When the YouTube block is present, `platforms.youtube.handle` is also required.
+- **Validation:** `streamer.alias` must be non-empty and unique once cleaned (submitting a duplicate alias returns `409 Conflict`). The `platforms.url` value must be a valid YouTube channel URL when provided.
 - **Response:** `201 Created` with the stored record echoed back as JSON, or `500 Internal Server Error` if the file append fails.
 
-### GET `/api/v1/server/config`
+### DELETE `/api/streamers/{id}`
+- **Purpose:** Removes a streamer record (including its platform metadata) from `data/streamers.json`.
+- **Request:** Include the streamer metadata in the body and repeat the ID in the path:
+  ```json
+  {
+    "streamer": {
+      "id": "SharpenDev",
+      "createdAt": "2025-03-01T15:04:05Z"
+    }
+  }
+  ```
+- **Notes:** Both the path parameter and `streamer.id` must match (case-insensitive), and `streamer.createdAt` must match the timestamp stored on the record (`time.RFC3339`). This serves as a safety check before deleting persisted data.
+- **Responses:**
+  - `200 OK` with `{ "status": "deleted", "id": "...", "createdAt": "..." }` when the record is deleted.
+  - `404 Not Found` if the ID does not match an existing streamer.
+  - `400 Bad Request` when the ID segment is missing or the JSON body is invalid/mismatched.
+  - `409 Conflict` when the provided `createdAt` does not match the stored record.
+  - `500 Internal Server Error` for unexpected persistence failures (also logged server-side).
+- **Handler coverage:** The same `/api/streamers` handler powers GET, POST, and DELETE, so clients can reuse the base path and expect the `Allow: GET, POST, DELETE` header on unsupported verbs.
+
+### GET `/api/server/config`
 - **Purpose:** Exposes runtime metadata consumed by companion tooling (including the standalone UI).
 - **Response:**
   ```json
@@ -102,7 +116,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
   }
   ```
 
-### POST `/api/v1/metadata/description`
+### POST `/api/metadata/description`
 - **Purpose:** Returns the `<meta name="description">` (or OpenGraph description) for a supplied public URL so tooling can pre-fill streamer descriptions, display names, and YouTube identifiers.
 - **Request body:**
   ```json

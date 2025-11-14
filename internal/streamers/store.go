@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -74,8 +75,10 @@ type TwitchPlatform struct {
 }
 
 var (
-	fileMu                 sync.Mutex
-	ErrDuplicateStreamerID = errors.New("streamer id already exists")
+	fileMu                       sync.Mutex
+	ErrDuplicateStreamerID       = errors.New("streamer id already exists")
+	ErrStreamerNotFound          = errors.New("streamer not found")
+	ErrStreamerTimestampMismatch = errors.New("streamer createdAt does not match")
 )
 
 // Append adds a new streamer record to disk and returns a copy with timestamps populated.
@@ -175,6 +178,51 @@ func UpdateFile(path string, updateFn func(*File) error) error {
 		return fmt.Errorf("write streamers file: %w", err)
 	}
 	return nil
+}
+
+// Delete removes a streamer by ID, ensuring the createdAt timestamp matches.
+func Delete(path, streamerID, createdAt string) error {
+	if path == "" {
+		return errors.New("streamers file path is required")
+	}
+	streamerID = strings.TrimSpace(streamerID)
+	if streamerID == "" {
+		return errors.New("streamer id is required")
+	}
+	createdAt = strings.TrimSpace(createdAt)
+	if createdAt == "" {
+		return errors.New("createdAt is required")
+	}
+	parseCreatedAt := func(value string) (time.Time, error) {
+		if value == "" {
+			return time.Time{}, errors.New("createdAt is required")
+		}
+		if ts, err := time.Parse(time.RFC3339Nano, value); err == nil {
+			return ts.UTC(), nil
+		}
+		ts, err := time.Parse(time.RFC3339, value)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return ts.UTC(), nil
+	}
+	expectedTime, err := parseCreatedAt(createdAt)
+	if err != nil {
+		return fmt.Errorf("invalid createdAt: %w", err)
+	}
+
+	return UpdateFile(path, func(file *File) error {
+		for i := range file.Records {
+			if strings.EqualFold(file.Records[i].Streamer.ID, streamerID) {
+				if !file.Records[i].CreatedAt.Equal(expectedTime) {
+					return fmt.Errorf("%w: %s", ErrStreamerTimestampMismatch, streamerID)
+				}
+				file.Records = append(file.Records[:i], file.Records[i+1:]...)
+				return nil
+			}
+		}
+		return fmt.Errorf("%w: %s", ErrStreamerNotFound, streamerID)
+	})
 }
 
 func readFile(path string) (File, error) {
