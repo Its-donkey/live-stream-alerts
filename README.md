@@ -102,6 +102,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
   - `400 Bad Request` when the ID segment is missing or the JSON body is invalid/mismatched.
   - `409 Conflict` when the provided `createdAt` does not match the stored record.
   - `500 Internal Server Error` for unexpected persistence failures (also logged server-side).
+- **Handler coverage:** The same `/api/streamers` handler powers GET, POST, and DELETE, so clients can reuse the base path and expect the `Allow: GET, POST, DELETE` header on unsupported verbs.
 
 ### GET `/api/server/config`
 - **Purpose:** Exposes runtime metadata consumed by companion tooling (including the standalone UI).
