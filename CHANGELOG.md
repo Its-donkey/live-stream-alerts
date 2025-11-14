@@ -42,3 +42,4 @@
 - Registered the consolidated `/api/streamers` handler in the router so DELETE requests (and the correct Allow header) are available to clients.
 - Added the missing list/delete handler implementations so the `/api/streamers` handler actually builds with GET/POST/DELETE support.
 - Restored the YouTube metadata handler import so `/api/metadata/description` compiles and keeps using the dedicated scraping package.
+- Registered `/api/streamers/` alongside `/api/streamers` so DELETE requests to `/api/streamers/{id}` reach the handler instead of 404ing.
