@@ -2,8 +2,12 @@
 package logging
 
 import (
+	"bytes"
+	"fmt"
 	"io"
 	"log"
+	"net/http"
+	"net/http/httputil"
 	"os"
 	"sync"
 )
@@ -26,6 +30,8 @@ type newlineWriter struct {
 	mu sync.Mutex
 	w  io.Writer
 }
+
+const maxLoggedResponseBody = 4096
 
 // New returns a Logger that writes to stdout using Go's default date/time flags.
 func New() Logger {
@@ -89,4 +95,81 @@ func (w *newlineWriter) Write(p []byte) (int, error) {
 		return 0, err
 	}
 	return len(p), nil
+}
+
+// WithHTTPLogging wraps the provided handler so every request/response pair is logged.
+func WithHTTPLogging(next http.Handler, logger Logger) http.Handler {
+	if logger == nil || next == nil {
+		return next
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if dump, err := httputil.DumpRequest(r, true); err == nil {
+			logger.Printf("---- Incoming request from %s ----\n%s", r.RemoteAddr, dump)
+		} else {
+			logger.Printf("failed to dump request from %s: %v", r.RemoteAddr, err)
+		}
+
+		lrw := newLoggingResponseWriter(w)
+		next.ServeHTTP(lrw, r)
+
+		status := lrw.StatusCode()
+		logger.Printf(
+			"---- Response for %s %s (%d %s) ----\n%s",
+			r.Method,
+			r.URL.Path,
+			status,
+			http.StatusText(status),
+			lrw.LoggedBody(),
+		)
+	})
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	status    int
+	buf       bytes.Buffer
+	truncated bool
+}
+
+func newLoggingResponseWriter(w http.ResponseWriter) *loggingResponseWriter {
+	return &loggingResponseWriter{ResponseWriter: w}
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	lrw.status = code
+	lrw.ResponseWriter.WriteHeader(code)
+}
+
+func (lrw *loggingResponseWriter) Write(b []byte) (int, error) {
+	if lrw.status == 0 {
+		lrw.status = http.StatusOK
+	}
+	if lrw.buf.Len() < maxLoggedResponseBody {
+		remaining := maxLoggedResponseBody - lrw.buf.Len()
+		if len(b) > remaining {
+			lrw.buf.Write(b[:remaining])
+			lrw.truncated = true
+		} else {
+			lrw.buf.Write(b)
+		}
+	} else {
+		lrw.truncated = true
+	}
+	return lrw.ResponseWriter.Write(b)
+}
+
+func (lrw *loggingResponseWriter) StatusCode() int {
+	if lrw.status == 0 {
+		return http.StatusOK
+	}
+	return lrw.status
+}
+
+func (lrw *loggingResponseWriter) LoggedBody() string {
+	body := lrw.buf.String()
+	if lrw.truncated {
+		return fmt.Sprintf("%s\n-- response truncated after %d bytes --", body, maxLoggedResponseBody)
+	}
+	return body
 }

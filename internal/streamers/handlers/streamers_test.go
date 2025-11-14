@@ -156,30 +156,19 @@ func TestStreamersHandlerDeleteValidations(t *testing.T) {
 	path := filepath.Join(dir, "streamers.json")
 	handler := StreamersHandler(StreamOptions{FilePath: path})
 
-	t.Run("missing path id", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodDelete, "/api/streamers/", bytes.NewBufferString(`{"streamer":{"id":""}}`))
+	t.Run("missing id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/api/streamers", bytes.NewBufferString(`{"streamer":{"id":""}}`))
 		rr := httptest.NewRecorder()
 
 		handler.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400 for missing path parameter, got %d", rr.Code)
-		}
-	})
-
-	t.Run("body mismatch", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodDelete, "/api/streamers/one", bytes.NewBufferString(`{"streamer":{"id":"two"}}`))
-		rr := httptest.NewRecorder()
-
-		handler.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400 for id mismatch, got %d", rr.Code)
+			t.Fatalf("expected 400 for missing id, got %d", rr.Code)
 		}
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodDelete, "/api/streamers/missing", bytes.NewBufferString(`{"streamer":{"id":"missing"}}`))
+		req := httptest.NewRequest(http.MethodDelete, "/api/streamers", bytes.NewBufferString(`{"streamer":{"id":"missing"}}`))
 		rr := httptest.NewRecorder()
 
 		handler.ServeHTTP(rr, req)

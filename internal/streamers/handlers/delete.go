@@ -25,14 +25,6 @@ func deleteStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 		return
 	}
 
-	// Extract ID from URL: /api/streamers/{id}
-	id := strings.TrimPrefix(r.URL.Path, "/api/streamers/")
-	id = strings.TrimSpace(strings.Trim(id, "/"))
-	if id == "" {
-		http.Error(w, "streamer id is required in path", http.StatusBadRequest)
-		return
-	}
-
 	// Parse JSON body
 	defer r.Body.Close()
 	var body deleteRequest
@@ -47,20 +39,16 @@ func deleteStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 		http.Error(w, "streamer.id is required in body", http.StatusBadRequest)
 		return
 	}
-	if !strings.EqualFold(bodyID, id) {
-		http.Error(w, "streamer.id mismatch between path and body", http.StatusBadRequest)
-		return
-	}
 
 	// Perform delete via streamers.Delete
-	if err := streamers.Delete(path, id); err != nil {
+	if err := streamers.Delete(path, bodyID); err != nil {
 		switch {
 		case errors.Is(err, streamers.ErrStreamerNotFound):
 			http.Error(w, "streamer not found", http.StatusNotFound)
 			return
 		default:
 			if logger != nil {
-				logger.Printf("failed to delete streamer %s: %v", id, err)
+				logger.Printf("failed to delete streamer %s: %v", bodyID, err)
 			}
 			http.Error(w, "failed to delete streamer", http.StatusInternalServerError)
 			return
@@ -72,6 +60,6 @@ func deleteStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status": "deleted",
-		"id":     id,
+		"id":     bodyID,
 	})
 }
