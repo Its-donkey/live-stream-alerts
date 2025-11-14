@@ -20,6 +20,9 @@
 ### Changed
 - Moved the HTTP router under `internal/api/v1` and updated docs/CLI tooling so future endpoints live under their API versioned package.
 - Relocated metadata scraping into the YouTube platform tree and corralled all YouTube handlers/clients/subscribers beneath `internal/platforms/youtube/{api,metadata,store,subscriptions}` for clearer ownership.
+- Simplified `POST /api/v1/streamers` to accept only alias/description/languages plus a single YouTube channel URL, deriving the streamer ID, resolving channel metadata, generating a hub secret, updating the store, and triggering subscriptions automatically.
+- Updated `DELETE /api/v1/streamers/{id}` to require both the matching path parameter and a JSON body containing the `streamer.id` and original `createdAt` timestamp, ensuring accidental deletions are caught before records are removed.
+- Added dedicated GET/POST/DELETE handler coverage for `/api/v1/streamers` and now advertise all supported methods via the `Allow` header (including `DELETE`) so clients can reliably introspect the endpoint.
 - Extracted the WebAssembly UI into a sibling project so this repository now focuses solely on the alert server APIs.
 - The subscribe handler now mirrors the hub's HTTP response (body/status) to the API client and falls back to the upstream status text when the hub omits a body.
 - Normalized all YouTube WebSub defaults (callback URL, lease duration, verification mode) inside the handler so clients can omit them safely.
@@ -33,3 +36,4 @@
 ### Fixed
 - Persist `streamer.alias` when creating records and require it as the primary identifier so requests without names no longer lose the alias field.
 - Removed references to the deprecated `/api/v1/youtube/new/subscribe` alias so the README only lists active endpoints.
+- Allow `DELETE /api/v1/streamers/{id}` to accept RFC3339 timestamps with or without fractional seconds so clients can resend the stored `createdAt` value without losing precision.
