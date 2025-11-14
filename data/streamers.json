@@ -345,6 +345,28 @@
       },
       "createdAt": "2025-11-12T05:41:05.717352Z",
       "updatedAt": "2025-11-12T05:41:06.799341Z"
+    },
+    {
+      "streamer": {
+        "id": "SharpenDev",
+        "alias": "SharpenDev",
+        "description": "Sharpening livestreams and tutorials.",
+        "firstName": "",
+        "lastName": "",
+        "email": "",
+        "languages": [
+          "English"
+        ]
+      },
+      "platforms": {
+        "youtube": {
+          "handle": "@SharpenDev",
+          "channelId": "UCmFeU-oQ748Ue61z5qBWLIw",
+          "hubSecret": "ZjOBIQc84BfvBaIwlT4O9UrHUw20gQPi"
+        }
+      },
+      "createdAt": "2025-11-13T23:42:50.506098Z",
+      "updatedAt": "2025-11-13T23:42:51.069595Z"
     }
   ]
 }

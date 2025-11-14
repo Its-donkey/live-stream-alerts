@@ -8,6 +8,7 @@ import (
 
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/subscriptions"
+	"live-stream-alerts/internal/platforms/youtube/websub"
 )
 
 // SubscribeHandlerOptions configures the subscribe handler.
@@ -44,7 +45,7 @@ func NewSubscribeHandler(opts SubscribeHandlerOptions) http.Handler {
 			requestHubURL = opts.HubURL
 		}
 
-		resp, body, err := subscriptions.SubscribeYouTube(r.Context(), client, requestHubURL, subscribeReq)
+		resp, body, finalReq, err := subscriptions.SubscribeYouTube(r.Context(), client, requestHubURL, subscribeReq)
 		if err != nil && opts.Logger != nil {
 			opts.Logger.Printf("subscribe request hub response: %v", err)
 		}
@@ -66,5 +67,7 @@ func NewSubscribeHandler(opts SubscribeHandlerOptions) http.Handler {
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			_, _ = io.WriteString(w, resp.Status)
 		}
+
+		websub.RecordSubscriptionResult(finalReq.VerifyToken, "", subscribeReq.Topic, resp.Status, string(body))
 	})
 }

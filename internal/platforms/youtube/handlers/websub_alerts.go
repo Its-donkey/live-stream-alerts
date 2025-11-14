@@ -123,9 +123,36 @@ func HandleSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, opts
 		}
 	}
 
-	websub.ConsumeExpectation(verifyToken)
+	finalExp := exp
+	if consumed, ok := websub.ConsumeExpectation(verifyToken); ok {
+		finalExp = consumed
+	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, challenge)
+
+	if logger != nil {
+		if finalExp.HubStatus != "" {
+			logger.Printf("YouTube hub response status: %s, body: %s", finalExp.HubStatus, finalExp.HubBody)
+		}
+		alias := strings.TrimSpace(finalExp.Alias)
+		if alias == "" {
+			alias = strings.TrimSpace(exp.Alias)
+		}
+		if alias == "" {
+			alias = channelID
+		}
+		if alias == "" {
+			alias = "channel"
+		}
+		displayTopic := topic
+		if displayTopic == "" {
+			displayTopic = finalExp.Topic
+		}
+		if displayTopic == "" {
+			displayTopic = exp.Topic
+		}
+		logger.Printf("YouTube alerts subscribed for %s (%s)", alias, displayTopic)
+	}
 
 	return true
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"live-stream-alerts/internal/logging"
+	"live-stream-alerts/internal/platforms/youtube/websub"
 	"live-stream-alerts/internal/streamers"
 )
 
@@ -62,13 +63,11 @@ func Subscribe(ctx context.Context, record streamers.Record, opts Options) error
 	}
 	NormaliseSubscribeRequest(&subscribeReq)
 
-	_, _, err := SubscribeYouTube(ctx, client, hubURL, subscribeReq)
+	resp, body, finalReq, err := SubscribeYouTube(ctx, client, hubURL, subscribeReq)
 	if err != nil {
 		return fmt.Errorf("subscribe youtube alerts: %w", err)
 	}
 
-	if opts.Logger != nil {
-		opts.Logger.Printf("YouTube alerts subscribed for %s (%s)", record.Streamer.Alias, topic)
-	}
+	websub.RecordSubscriptionResult(finalReq.VerifyToken, record.Streamer.Alias, topic, resp.Status, string(body))
 	return nil
 }
