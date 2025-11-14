@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/streamers"
@@ -59,6 +60,10 @@ func deleteStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 		http.Error(w, "streamer.createdAt is required", http.StatusBadRequest)
 		return
 	}
+	if !isRFC3339(createdAt) {
+		http.Error(w, "streamer.createdAt must be a valid RFC3339 timestamp", http.StatusBadRequest)
+		return
+	}
 
 	// Perform delete via streamers.Delete
 	if err := streamers.Delete(path, id, createdAt); err != nil {
@@ -86,4 +91,14 @@ func deleteStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 		"id":        id,
 		"createdAt": createdAt,
 	})
+}
+
+func isRFC3339(value string) bool {
+	if _, err := time.Parse(time.RFC3339Nano, value); err == nil {
+		return true
+	}
+	if _, err := time.Parse(time.RFC3339, value); err == nil {
+		return true
+	}
+	return false
 }

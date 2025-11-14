@@ -44,3 +44,4 @@
 - Restored the YouTube metadata handler import so `/api/metadata/description` compiles and keeps using the dedicated scraping package.
 - Registered `/api/streamers/` alongside `/api/streamers` so DELETE requests to `/api/streamers/{id}` reach the handler instead of 404ing.
 - Restored the previous subscribe defaulting behavior so `NormaliseSubscribeRequest` only fills in blank fields, allowing clients to override callback/hub/verify/lease values.
+- DELETE `/api/streamers/{id}` now validates `streamer.createdAt` locally so malformed timestamps return `400 Bad Request` instead of surfacing as `500` errors.

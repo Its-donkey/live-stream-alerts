@@ -39,21 +39,11 @@ type YouTubeRequest struct {
 
 // NormaliseSubscribeRequest applies the enforced defaults required by the system.
 func NormaliseSubscribeRequest(req *YouTubeRequest) {
-	if strings.TrimSpace(req.HubURL) == "" {
-		req.HubURL = DefaultHubURL
-	}
-	if strings.TrimSpace(req.Callback) == "" {
-		req.Callback = DefaultCallbackURL
-	}
-	if strings.TrimSpace(req.Mode) == "" {
-		req.Mode = DefaultMode
-	}
-	if strings.TrimSpace(req.Verify) == "" {
-		req.Verify = DefaultVerify
-	}
-	if req.LeaseSeconds == 0 {
-		req.LeaseSeconds = DefaultLease
-	}
+	req.HubURL = DefaultHubURL
+	req.Callback = DefaultCallbackURL
+	req.Mode = DefaultMode
+	req.Verify = DefaultVerify
+	req.LeaseSeconds = DefaultLease
 }
 
 // SubscribeYouTube executes a WebSub subscription call against the provided hub URL.
