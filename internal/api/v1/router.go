@@ -7,7 +7,6 @@ import (
 
 	"live-stream-alerts/internal/logging"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
-	ytmetadatahandlers "live-stream-alerts/internal/platforms/youtube/metadata/handlers"
 	streamershandlers "live-stream-alerts/internal/streamers/handlers"
 )
 
@@ -38,12 +37,12 @@ func NewRouter(opts Options) http.Handler {
 
 	mux.Handle("/api/youtube/channel", youtubehandlers.NewChannelLookupHandler(nil))
 
-	mux.Handle("/api/streamers", streamershandlers.NewCreateHandler(streamershandlers.CreateOptions{
+	mux.Handle("/api/streamers", streamershandlers.StreamersHandler(streamershandlers.StreamOptions{
 		Logger:   logger,
 		FilePath: streamersPath,
 	}))
 
-	mux.Handle("/api/metadata/description", ytmetadatahandlers.NewDescriptionHandler(ytmetadatahandlers.DescriptionHandlerOptions{}))
+	mux.Handle("/api/metadata/description", youtubehandlers.NewDescriptionHandler(youtubehandlers.DescriptionHandlerOptions{}))
 
 	mux.HandleFunc("/api/server/config", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, opts.RuntimeInfo)

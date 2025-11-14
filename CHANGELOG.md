@@ -38,3 +38,4 @@
 - Persist `streamer.alias` when creating records and require it as the primary identifier so requests without names no longer lose the alias field.
 - Removed references to the deprecated `/api/youtube/new/subscribe` alias so the README only lists active endpoints.
 - Allow `DELETE /api/streamers/{id}` to accept RFC3339 timestamps with or without fractional seconds so clients can resend the stored `createdAt` value without losing precision.
+- Registered the consolidated `/api/streamers` handler in the router so DELETE requests (and the correct Allow header) are available to clients.
