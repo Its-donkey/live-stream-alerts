@@ -43,3 +43,4 @@
 - Added the missing list/delete handler implementations so the `/api/streamers` handler actually builds with GET/POST/DELETE support.
 - Restored the YouTube metadata handler import so `/api/metadata/description` compiles and keeps using the dedicated scraping package.
 - Registered `/api/streamers/` alongside `/api/streamers` so DELETE requests to `/api/streamers/{id}` reach the handler instead of 404ing.
+- Restored the previous subscribe defaulting behavior so `NormaliseSubscribeRequest` only fills in blank fields, allowing clients to override callback/hub/verify/lease values.

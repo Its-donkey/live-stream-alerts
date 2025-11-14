@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 )
 
@@ -37,11 +39,21 @@ type YouTubeRequest struct {
 
 // NormaliseSubscribeRequest applies the enforced defaults required by the system.
 func NormaliseSubscribeRequest(req *YouTubeRequest) {
-	req.HubURL = DefaultHubURL
-	req.Callback = DefaultCallbackURL
-	req.Mode = DefaultMode
-	req.Verify = DefaultVerify
-	req.LeaseSeconds = DefaultLease
+	if strings.TrimSpace(req.HubURL) == "" {
+		req.HubURL = DefaultHubURL
+	}
+	if strings.TrimSpace(req.Callback) == "" {
+		req.Callback = DefaultCallbackURL
+	}
+	if strings.TrimSpace(req.Mode) == "" {
+		req.Mode = DefaultMode
+	}
+	if strings.TrimSpace(req.Verify) == "" {
+		req.Verify = DefaultVerify
+	}
+	if req.LeaseSeconds == 0 {
+		req.LeaseSeconds = DefaultLease
+	}
 }
 
 // SubscribeYouTube executes a WebSub subscription call against the provided hub URL.
@@ -49,15 +61,15 @@ func NormaliseSubscribeRequest(req *YouTubeRequest) {
 //   - Topic, Callback, Mode, Verify, VerifyToken, Secret, LeaseSeconds
 //
 // For WebSub subscribe, Mode should be "subscribe"; Verify is "sync" or "async".
-func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req YouTubeRequest) (*http.Response, []byte, error) {
+func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req YouTubeRequest) (*http.Response, []byte, YouTubeRequest, error) {
 	if hc == nil {
 		hc = &http.Client{Timeout: 10 * time.Second}
 	}
 	if strings.TrimSpace(hubURL) == "" {
-		return nil, nil, errors.New("hubURL is required")
+		return nil, nil, req, errors.New("hubURL is required")
 	}
 	if strings.TrimSpace(req.Topic) == "" {
-		return nil, nil, errors.New("topic is required")
+		return nil, nil, req, errors.New("topic is required")
 	}
 	callback := strings.TrimSpace(req.Callback)
 	if callback == "" {
@@ -119,25 +131,28 @@ func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req Y
 	hubURL = strings.TrimSpace(hubURL)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, hubURL, strings.NewReader(form.Encode()))
 	if err != nil {
-		return nil, nil, fmt.Errorf("build request: %w", err)
+		return nil, nil, req, fmt.Errorf("build request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	httpReq.Header.Set("User-Agent", "sharpen-live-websub-client/1.0")
 
+	if dump, err := httputil.DumpRequestOut(httpReq, true); err == nil {
+		logging.New().Printf("Outbound WebSub request:\n%s", dump)
+	}
+
 	resp, err := hc.Do(httpReq)
 	if err != nil {
-		return nil, nil, fmt.Errorf("post to hub: %w", err)
+		return nil, nil, req, fmt.Errorf("post to hub: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, readErr := io.ReadAll(resp.Body)
 	if readErr != nil {
-		return resp, nil, fmt.Errorf("read hub response: %w", readErr)
+		return resp, nil, req, fmt.Errorf("read hub response: %w", readErr)
 	}
-	fmt.Printf("YouTube hub response status: %s, body: %s", resp.Status, string(body))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return resp, body, fmt.Errorf("hub returned non-2xx: %s", resp.Status)
+		return resp, body, req, fmt.Errorf("hub returned non-2xx: %s", resp.Status)
 	}
 	subscriptionAccepted = true
-	return resp, body, nil
+	return resp, body, req, nil
 }
