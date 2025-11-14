@@ -25,7 +25,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 | GET    | `/api/streamers`             | Returns every stored streamer record. |
 | POST   | `/api/streamers`             | Persists streamer metadata to `data/streamers.json`. |
 | PATCH  | `/api/streamers`             | Updates the alias/description/languages of an existing streamer. |
-| DELETE | `/api/streamers/{id}`        | Removes a stored streamer record. |
+| DELETE | `/api/streamers`             | Removes a stored streamer record. |
 | POST   | `/api/youtube/metadata`     | Scrapes a public URL and returns its meta description/title. |
 | GET    | `/api/server/config`         | Returns the server runtime information consumed by the UI. |
 
@@ -85,9 +85,9 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 - **Validation:** `streamer.alias` must be non-empty and unique once cleaned (submitting a duplicate alias returns `409 Conflict`). The `platforms.url` value must be a valid YouTube channel URL when provided.
 - **Response:** `201 Created` with the stored record echoed back as JSON, or `500 Internal Server Error` if the file append fails.
 
-### DELETE `/api/streamers/{id}`
+### DELETE `/api/streamers`
 - **Purpose:** Removes a streamer record (including its platform metadata) from `data/streamers.json`.
-- **Request:** Include the streamer metadata in the body and repeat the ID in the path:
+- **Request:** Provide the streamer ID in the body:
   ```json
   {
     "streamer": {
@@ -95,7 +95,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
     }
   }
   ```
-- **Notes:** Both the path parameter and `streamer.id` must match (case-insensitive); the server no longer requires the `createdAt` timestamp.
+- **Notes:** The path no longer requires the ID segment; only the JSON body must include `streamer.id` (case-insensitive match).
 - **Responses:**
   - `200 OK` with `{ "status": "deleted", "id": "..." }` when the record is deleted.
   - `404 Not Found` if the ID does not match an existing streamer.

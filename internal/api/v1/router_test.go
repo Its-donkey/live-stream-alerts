@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"live-stream-alerts/internal/platforms/youtube/websub"
 )
 
 type stubLogger struct {
@@ -68,5 +72,54 @@ func TestNewRouterWithoutLogger(t *testing.T) {
 	router.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+}
+
+func TestAlertsRouteHandlesVerification(t *testing.T) {
+	tmp := t.TempDir()
+	streamersPath := filepath.Join(tmp, "streamers.json")
+	if err := os.WriteFile(streamersPath, []byte(`{"$schema":"","streamers":[]}`), 0o644); err != nil {
+		t.Fatalf("write streamers file: %v", err)
+	}
+
+	logger := &stubLogger{}
+	router := NewRouter(Options{
+		Logger:        logger,
+		StreamersPath: streamersPath,
+	})
+
+	token := "verify-token"
+	websub.RegisterExpectation(websub.Expectation{
+		VerifyToken:  token,
+		Topic:        "https://example.com/feed",
+		Mode:         "subscribe",
+		LeaseSeconds: 864000,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/alerts?hub.mode=subscribe&hub.topic=https://example.com/feed&hub.challenge=abc&hub.lease_seconds=864000&hub.verify_token="+token, nil)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if body := rr.Body.String(); body != "abc" {
+		t.Fatalf("expected challenge to be echoed, got %q", body)
+	}
+}
+
+func TestAlertsRouteRejectsUnsupportedMethods(t *testing.T) {
+	router := NewRouter(Options{})
+	req := httptest.NewRequest(http.MethodPost, "/alerts", nil)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rr.Code)
+	}
+	if allow := rr.Header().Get("Allow"); allow != http.MethodGet {
+		t.Fatalf("expected Allow header to advertise GET, got %q", allow)
 	}
 }

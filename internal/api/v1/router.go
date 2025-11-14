@@ -3,7 +3,6 @@ package v1
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httputil"
 
 	"live-stream-alerts/internal/logging"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
@@ -16,6 +15,7 @@ type RuntimeInfo struct {
 	Addr        string `json:"addr"`
 	Port        string `json:"port"`
 	ReadTimeout string `json:"readTimeout"`
+	DataPath    string `json:"dataPath"`
 }
 
 // Options configures the HTTP router.
@@ -31,20 +31,21 @@ func NewRouter(opts Options) http.Handler {
 	logger := opts.Logger
 	streamersPath := opts.StreamersPath
 
-	mux.Handle("/api/youtube/subscribe", youtubehandlers.NewSubscribeHandler(youtubehandlers.SubscribeHandlerOptions{
-		Logger: logger,
-	}))
-
-	mux.Handle("/api/youtube/channel", youtubehandlers.NewChannelLookupHandler(nil))
-
 	streamersHandler := streamershandlers.StreamersHandler(streamershandlers.StreamOptions{
 		Logger:   logger,
 		FilePath: streamersPath,
 	})
-	mux.Handle("/api/streamers", streamersHandler)
-	mux.Handle("/api/streamers/", streamersHandler)
 
+	mux.Handle("/api/youtube/channel", youtubehandlers.NewChannelLookupHandler(nil))
 	mux.Handle("/api/youtube/metadata", youtubehandlers.NewMetadataHandler(youtubehandlers.MetadataHandlerOptions{}))
+	mux.Handle("/api/youtube/subscribe", youtubehandlers.NewSubscribeHandler(youtubehandlers.SubscribeHandlerOptions{
+		Logger: logger,
+	}))
+	mux.Handle("/api/streamers", streamersHandler)
+
+	alertsHandler := handleAlerts(logger, streamersPath)
+	mux.Handle("/alerts", alertsHandler)
+	mux.Handle("/alert", alertsHandler)
 
 	mux.HandleFunc("/api/server/config", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, opts.RuntimeInfo)
@@ -56,18 +57,7 @@ func NewRouter(opts Options) http.Handler {
 		_, _ = w.Write([]byte("UI assets not configured"))
 	})
 
-	if logger == nil {
-		return mux
-	}
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if dump, err := httputil.DumpRequest(r, true); err == nil {
-			logger.Printf("---- Incoming request from %s ----\n%s", r.RemoteAddr, dump)
-		} else {
-			logger.Printf("failed to dump request from %s: %v", r.RemoteAddr, err)
-		}
-		mux.ServeHTTP(w, r)
-	})
+	return logging.WithHTTPLogging(mux, logger)
 }
 
 func respondJSON(w http.ResponseWriter, payload any) {
@@ -75,4 +65,17 @@ func respondJSON(w http.ResponseWriter, payload any) {
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
+}
+
+func handleAlerts(logger logging.Logger, streamersPath string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if youtubehandlers.HandleSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
+			Logger:        logger,
+			StreamersPath: streamersPath,
+		}) {
+			return
+		}
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	})
 }

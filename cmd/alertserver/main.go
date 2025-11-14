@@ -29,6 +29,7 @@ func main() {
 			Addr:        addr,
 			Port:        port,
 			ReadTimeout: readWindow.String(),
+			DataPath:    streamers.DefaultFilePath,
 		},
 	})
 

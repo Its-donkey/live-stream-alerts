@@ -355,18 +355,20 @@
         "lastName": "",
         "email": "",
         "languages": [
-          "English"
+          "English",
+          "Japanese"
         ]
       },
       "platforms": {
         "youtube": {
           "handle": "@SharpenDev",
           "channelId": "UCmFeU-oQ748Ue61z5qBWLIw",
-          "hubSecret": "ZjOBIQc84BfvBaIwlT4O9UrHUw20gQPi"
+          "hubSecret": "iB8z7V8krv84lizGRRaGcQkhROP-O-5k",
+          "hubLeaseRenewalDue": "2025-11-14T06:20:09Z"
         }
       },
-      "createdAt": "2025-11-13T23:42:50.506098Z",
-      "updatedAt": "2025-11-13T23:42:51.069595Z"
+      "createdAt": "2025-11-14T06:20:08.07048Z",
+      "updatedAt": "2025-11-14T06:20:09.387755Z"
     }
   ]
 }

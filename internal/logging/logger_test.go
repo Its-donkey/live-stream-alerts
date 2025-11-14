@@ -2,6 +2,10 @@ package logging
 
 import (
 	"bytes"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -50,5 +54,58 @@ func TestStdLoggerStdLoggerSafe(t *testing.T) {
 	sl := &stdLogger{}
 	if sl.StdLogger() != nil {
 		t.Fatalf("expected nil base")
+	}
+}
+
+type captureLogger struct {
+	entries []string
+}
+
+func (c *captureLogger) Printf(format string, args ...any) {
+	c.entries = append(c.entries, fmt.Sprintf(format, args...))
+}
+
+func TestWithHTTPLoggingWrapsHandler(t *testing.T) {
+	logger := &captureLogger{}
+	base := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte("payload"))
+	})
+	handler := WithHTTPLogging(base, logger)
+
+	req := httptest.NewRequest(http.MethodPost, "/test", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", rr.Code)
+	}
+	if len(logger.entries) < 2 {
+		t.Fatalf("expected request/response logs to be recorded")
+	}
+}
+
+func TestWithHTTPLoggingNilLoggerReturnsOriginal(t *testing.T) {
+	base := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+	if got := WithHTTPLogging(base, nil); fmt.Sprintf("%p", got) != fmt.Sprintf("%p", base) {
+		t.Fatalf("expected handler to be returned untouched when logger is nil")
+	}
+}
+
+func TestLoggingResponseWriterTruncatesLargeBodies(t *testing.T) {
+	rr := httptest.NewRecorder()
+	lrw := newLoggingResponseWriter(rr)
+	payload := strings.Repeat("x", maxLoggedResponseBody+10)
+
+	if _, err := lrw.Write([]byte(payload)); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if lrw.StatusCode() != http.StatusOK {
+		t.Fatalf("expected default status to be 200, got %d", lrw.StatusCode())
+	}
+	body := lrw.LoggedBody()
+	if !strings.Contains(body, "-- response truncated after") {
+		t.Fatalf("expected truncation notice, got %q", body)
 	}
 }
