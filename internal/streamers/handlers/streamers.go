@@ -19,7 +19,7 @@ type StreamOptions struct {
 	YouTubeHubURL string
 }
 
-// StreamersHandler returns a handler for GET/POST /api/v1/streamers.
+// StreamersHandler returns a handler for GET/POST /api/streamers.
 func StreamersHandler(opts StreamOptions) http.Handler {
 	path := opts.FilePath
 	if path == "" {

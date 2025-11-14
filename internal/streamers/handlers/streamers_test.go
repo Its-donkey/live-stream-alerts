@@ -29,7 +29,7 @@ func TestStreamersHandlerGetListsStreamers(t *testing.T) {
 	}
 
 	handler := StreamersHandler(StreamOptions{FilePath: path})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/streamers", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/streamers", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -49,7 +49,7 @@ func TestStreamersHandlerGetListsStreamers(t *testing.T) {
 
 func TestStreamersHandlerPostValidation(t *testing.T) {
 	handler := StreamersHandler(StreamOptions{FilePath: filepath.Join(t.TempDir(), "streamers.json")})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/streamers", bytes.NewBufferString("not json"))
+	req := httptest.NewRequest(http.MethodPost, "/api/streamers", bytes.NewBufferString("not json"))
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -76,7 +76,7 @@ func TestStreamersHandlerPostSuccess(t *testing.T) {
 	}
 	body, _ := json.Marshal(payload)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/streamers", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/streamers", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -132,7 +132,7 @@ func TestStreamersHandlerDeleteSuccess(t *testing.T) {
 	}
 	body, _ := json.Marshal(payload)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/streamers/"+record.Streamer.ID, bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodDelete, "/api/streamers/"+record.Streamer.ID, bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -159,7 +159,7 @@ func TestStreamersHandlerDeleteValidations(t *testing.T) {
 	handler := StreamersHandler(StreamOptions{FilePath: path})
 
 	t.Run("missing path id", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/streamers/", bytes.NewBufferString(`{"streamer":{"id":"","createdAt":""}}`))
+		req := httptest.NewRequest(http.MethodDelete, "/api/streamers/", bytes.NewBufferString(`{"streamer":{"id":"","createdAt":""}}`))
 		rr := httptest.NewRecorder()
 
 		handler.ServeHTTP(rr, req)
@@ -170,7 +170,7 @@ func TestStreamersHandlerDeleteValidations(t *testing.T) {
 	})
 
 	t.Run("body mismatch", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/streamers/one", bytes.NewBufferString(`{"streamer":{"id":"two","createdAt":"2025-01-01T00:00:00Z"}}`))
+		req := httptest.NewRequest(http.MethodDelete, "/api/streamers/one", bytes.NewBufferString(`{"streamer":{"id":"two","createdAt":"2025-01-01T00:00:00Z"}}`))
 		rr := httptest.NewRecorder()
 
 		handler.ServeHTTP(rr, req)
@@ -199,7 +199,7 @@ func TestStreamersHandlerDeleteValidations(t *testing.T) {
 
 		req := httptest.NewRequest(
 			http.MethodDelete,
-			"/api/v1/streamers/"+rec.Streamer.ID,
+			"/api/streamers/"+rec.Streamer.ID,
 			bytes.NewBufferString(`{"streamer":{"id":"`+rec.Streamer.ID+`","createdAt":"`+rec.CreatedAt.Add(time.Hour).Format(time.RFC3339Nano)+`"}}`),
 		)
 		rr := httptest.NewRecorder()
@@ -212,7 +212,7 @@ func TestStreamersHandlerDeleteValidations(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/streamers/missing", bytes.NewBufferString(`{"streamer":{"id":"missing","createdAt":"2025-01-01T00:00:00Z"}}`))
+		req := httptest.NewRequest(http.MethodDelete, "/api/streamers/missing", bytes.NewBufferString(`{"streamer":{"id":"missing","createdAt":"2025-01-01T00:00:00Z"}}`))
 		rr := httptest.NewRecorder()
 
 		handler.ServeHTTP(rr, req)
@@ -225,7 +225,7 @@ func TestStreamersHandlerDeleteValidations(t *testing.T) {
 
 func TestStreamersHandlerMethodNotAllowed(t *testing.T) {
 	handler := StreamersHandler(StreamOptions{})
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/streamers", nil)
+	req := httptest.NewRequest(http.MethodPut, "/api/streamers", nil)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
