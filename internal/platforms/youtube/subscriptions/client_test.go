@@ -17,6 +17,98 @@ func TestNormaliseSubscribeRequest(t *testing.T) {
 	}
 }
 
+func TestNormaliseSubscribeRequestDoesNotOverrideProvidedValues(t *testing.T) {
+	req := YouTubeRequest{
+		HubURL:       "https://custom-hub",
+		Callback:     "https://custom-callback",
+		Verify:       "sync",
+		LeaseSeconds: 10,
+	}
+	NormaliseSubscribeRequest(&req)
+	if req.HubURL != "https://custom-hub" {
+		t.Fatalf("hub url was overridden: %s", req.HubURL)
+	}
+	if req.Callback != "https://custom-callback" {
+		t.Fatalf("callback was overridden: %s", req.Callback)
+	}
+	if req.Verify != "sync" {
+		t.Fatalf("verify was overridden: %s", req.Verify)
+	}
+	if req.LeaseSeconds != 10 {
+		t.Fatalf("lease was overridden: %d", req.LeaseSeconds)
+	}
+	if req.Mode != DefaultMode {
+		t.Fatalf("mode should still be forced to %s", DefaultMode)
+	}
+}
+
+func TestNormaliseUnsubscribeRequestDoesNotOverrideProvidedValues(t *testing.T) {
+	req := YouTubeRequest{
+		HubURL:       "https://custom-hub",
+		Callback:     "https://custom-callback",
+		Verify:       "sync",
+		LeaseSeconds: 10,
+	}
+	NormaliseUnsubscribeRequest(&req)
+	if req.HubURL != "https://custom-hub" {
+		t.Fatalf("hub url was overridden: %s", req.HubURL)
+	}
+	if req.Callback != "https://custom-callback" {
+		t.Fatalf("callback was overridden: %s", req.Callback)
+	}
+	if req.Verify != "sync" {
+		t.Fatalf("verify was overridden: %s", req.Verify)
+	}
+	if req.LeaseSeconds != 10 {
+		t.Fatalf("lease was overridden: %d", req.LeaseSeconds)
+	}
+	if req.Mode != "unsubscribe" {
+		t.Fatalf("mode should be unsubscribe, got %s", req.Mode)
+	}
+}
+
+func TestConfigureDefaultsOverridesValues(t *testing.T) {
+	original := Defaults{
+		HubURL:       DefaultHubURL,
+		CallbackURL:  DefaultCallbackURL,
+		LeaseSeconds: DefaultLease,
+		Mode:         DefaultMode,
+		Verify:       DefaultVerify,
+	}
+	t.Cleanup(func() {
+		ConfigureDefaults(original)
+	})
+
+	ConfigureDefaults(Defaults{
+		HubURL:       "https://override-hub",
+		CallbackURL:  "https://override-callback",
+		LeaseSeconds: 42,
+		Mode:         "sync-mode",
+		Verify:       "sync",
+	})
+
+	if DefaultHubURL != "https://override-hub" {
+		t.Fatalf("expected hub override, got %s", DefaultHubURL)
+	}
+	if DefaultCallbackURL != "https://override-callback" {
+		t.Fatalf("expected callback override, got %s", DefaultCallbackURL)
+	}
+	if DefaultLease != 42 {
+		t.Fatalf("expected lease override, got %d", DefaultLease)
+	}
+	if DefaultMode != "sync-mode" {
+		t.Fatalf("expected mode override, got %s", DefaultMode)
+	}
+	if DefaultVerify != "sync" {
+		t.Fatalf("expected verify override, got %s", DefaultVerify)
+	}
+
+	ConfigureDefaults(Defaults{})
+	if DefaultHubURL != "https://override-hub" {
+		t.Fatalf("blank override should be ignored")
+	}
+}
+
 func TestSubscribeYouTubeSuccess(t *testing.T) {
 	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {

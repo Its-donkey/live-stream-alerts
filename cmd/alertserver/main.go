@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	"live-stream-alerts/config"
 	apiv1 "live-stream-alerts/internal/api/v1"
 	"live-stream-alerts/internal/httpserver"
 	"live-stream-alerts/internal/logging"
@@ -21,6 +22,10 @@ func main() {
 	)
 	readWindow := 10 * time.Second
 
+	// Configure YouTube WebSub defaults (flags + env).
+	config.ConfigureYouTube()
+
+	// -----------------------------------------------------
 	router := apiv1.NewRouter(apiv1.Options{
 		Logger:        logger,
 		StreamersPath: streamers.DefaultFilePath,
@@ -65,3 +70,4 @@ func main() {
 		}
 	}
 }
+
