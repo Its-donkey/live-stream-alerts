@@ -39,20 +39,36 @@ type YouTubeRequest struct {
 
 // NormaliseSubscribeRequest applies the enforced defaults required by the system.
 func NormaliseSubscribeRequest(req *YouTubeRequest) {
-	req.HubURL = DefaultHubURL
-	req.Callback = DefaultCallbackURL
-	req.Mode = DefaultMode
-	req.Verify = DefaultVerify
-	req.LeaseSeconds = DefaultLease
+	req.Mode = "subscribe"
+	if strings.TrimSpace(req.HubURL) == "" {
+		req.HubURL = DefaultHubURL
+	}
+	if strings.TrimSpace(req.Callback) == "" {
+		req.Callback = DefaultCallbackURL
+	}
+	if strings.TrimSpace(req.Verify) == "" {
+		req.Verify = DefaultVerify
+	}
+	if req.LeaseSeconds <= 0 {
+		req.LeaseSeconds = DefaultLease
+	}
 }
 
 // NormaliseUnsubscribeRequest applies the enforced defaults for unsubscribe flows.
 func NormaliseUnsubscribeRequest(req *YouTubeRequest) {
-	req.HubURL = DefaultHubURL
-	req.Callback = DefaultCallbackURL
 	req.Mode = "unsubscribe"
-	req.Verify = DefaultVerify
-	req.LeaseSeconds = DefaultLease
+	if strings.TrimSpace(req.HubURL) == "" {
+		req.HubURL = DefaultHubURL
+	}
+	if strings.TrimSpace(req.Callback) == "" {
+		req.Callback = DefaultCallbackURL
+	}
+	if strings.TrimSpace(req.Verify) == "" {
+		req.Verify = DefaultVerify
+	}
+	if req.LeaseSeconds <= 0 {
+		req.LeaseSeconds = DefaultLease
+	}
 }
 
 // SubscribeYouTube executes a WebSub subscription call against the provided hub URL.
