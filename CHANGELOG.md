@@ -13,6 +13,7 @@
 - Derived `streamer.id` from the alias by stripping whitespace/punctuation and tightened the schema to enforce alphanumeric IDs.
 - Reject duplicate streamer aliases by enforcing unique cleaned IDs during persistence and documenting the resulting `409 Conflict` behavior.
 - Added `/api/youtube/metadata` so tooling can fetch channel summaries and auto-fill the description/name/YouTube handle fields when a URL is entered.
+- Stored every YouTube PubSubHubbub request field (topic/callback/hub/verify mode/lease duration) in streamer records and documented the schema so the alert server can persist and inspect future subscription attempts without losing context.
 - Added `streamer.languages` to the schema/storage plus validation so submissions only include supported language codes.
 - Automatically subscribes YouTube channels (via PubSubHubbub) whenever a newly created streamer includes YouTube platform data, resolving channel IDs from handles when needed.
 - Added a JSON schema (`schema/streamers.schema.json`) and typed storage layer for streamers so data persists with server-managed IDs and timestamps.
@@ -40,6 +41,7 @@
 - Consolidated all logging through the internal logger package so runtime output shares consistent formatting regardless of entry point, including a blank spacer line before every timestamped entry for readability.
 - Added explicit logging after sending the hub challenge reply so the status/body echoed back to YouTube are captured.
 - Made the YouTube WebSub defaults configurable through environment variables or CLI flags so deployments are not tied to baked-in hub/callback values.
+- DELETE `/api/streamers` now unsubscribes the corresponding YouTube WebSub feed before removing the record so PubSubHubbub callbacks stop immediately.
 ### Fixed
 - Persist `streamer.alias` when creating records and require it as the primary identifier so requests without names no longer lose the alias field.
 - Removed references to the deprecated `/api/youtube/new/subscribe` alias so the README only lists active endpoints.

@@ -60,6 +60,11 @@ type YouTubePlatform struct {
 	ChannelID          string `json:"channelId,omitempty"`
 	HubSecret          string `json:"hubSecret,omitempty"`
 	HubLeaseRenewalDue string `json:"hubLeaseRenewalDue,omitempty"`
+	Topic              string `json:"topic,omitempty"`
+	CallbackURL        string `json:"callbackUrl,omitempty"`
+	HubURL             string `json:"hubUrl,omitempty"`
+	VerifyMode         string `json:"verifyMode,omitempty"`
+	LeaseSeconds       int    `json:"leaseSeconds,omitempty"`
 }
 
 // FacebookPlatform stores Facebook-specific metadata.
@@ -246,6 +251,32 @@ func Delete(path, streamerID string) error {
 		}
 		return fmt.Errorf("%w: %s", ErrStreamerNotFound, streamerID)
 	})
+}
+
+// Get returns a single streamer record by ID.
+func Get(path, streamerID string) (Record, error) {
+	if path == "" {
+		return Record{}, errors.New("streamers file path is required")
+	}
+	streamerID = strings.TrimSpace(streamerID)
+	if streamerID == "" {
+		return Record{}, errors.New("streamer id is required")
+	}
+
+	fileMu.Lock()
+	defer fileMu.Unlock()
+
+	fileData, err := readFile(path)
+	if err != nil {
+		return Record{}, err
+	}
+
+	for _, record := range fileData.Records {
+		if strings.EqualFold(record.Streamer.ID, streamerID) {
+			return record, nil
+		}
+	}
+	return Record{}, fmt.Errorf("%w: %s", ErrStreamerNotFound, streamerID)
 }
 
 func readFile(path string) (File, error) {

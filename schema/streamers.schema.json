@@ -154,6 +154,29 @@
 				"type": "string",
 				"format": "date-time",
 				"description": "Date and time that the YouTube alert subscription is due for renewal"
+				},
+				"topic": {
+				"type": "string",
+				"description": "Full PubSubHubbub topic URL that was submitted when subscribing"
+				},
+				"callbackUrl": {
+				"type": "string",
+				"format": "uri",
+				"description": "Callback URL registered with YouTube for alert delivery"
+				},
+				"hubUrl": {
+				"type": "string",
+				"format": "uri",
+				"description": "PubSubHubbub hub endpoint used for the subscription"
+				},
+				"verifyMode": {
+				"type": "string",
+				"description": "Preferred verification mode (sync or async)"
+				},
+				"leaseSeconds": {
+				"type": "integer",
+				"minimum": 0,
+				"description": "Lease duration requested when subscribing (seconds)"
 				}
 			},
 			"required": [

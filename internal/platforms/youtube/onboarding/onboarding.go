@@ -71,8 +71,9 @@ func FromURL(ctx context.Context, record streamers.Record, channelURL string, op
 		Client: client,
 		HubURL: opts.HubURL,
 		Logger: opts.Logger,
+		Mode:   "subscribe",
 	}
-	return subscriptions.Subscribe(ctx, updatedRecord, subscribeOpts)
+	return subscriptions.ManageSubscription(ctx, updatedRecord, subscribeOpts)
 }
 
 func parseYouTubeURL(raw string) (handle string, channelID string, err error) {
@@ -112,12 +113,8 @@ func setYouTubePlatform(path string, streamerID string, yt streamers.YouTubePlat
 			if !strings.EqualFold(file.Records[i].Streamer.ID, streamerID) {
 				continue
 			}
-			file.Records[i].Platforms.YouTube = &streamers.YouTubePlatform{
-				Handle:             yt.Handle,
-				ChannelID:          yt.ChannelID,
-				HubSecret:          yt.HubSecret,
-				HubLeaseRenewalDue: yt.HubLeaseRenewalDue,
-			}
+			copy := yt
+			file.Records[i].Platforms.YouTube = &copy
 			file.Records[i].UpdatedAt = time.Now().UTC()
 			updated = file.Records[i]
 			return nil
