@@ -4,11 +4,10 @@ import (
 	"context"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
+	"live-stream-alerts/config"
 	apiv1 "live-stream-alerts/internal/api/v1"
 	"live-stream-alerts/internal/httpserver"
 	"live-stream-alerts/internal/logging"
@@ -24,7 +23,7 @@ func main() {
 	readWindow := 10 * time.Second
 
 	// Configure YouTube WebSub defaults (flags + env).
-	configureYouTubeDefaults()
+	config.ConfigureYouTube()
 
 	// -----------------------------------------------------
 	router := apiv1.NewRouter(apiv1.Options{
@@ -72,18 +71,3 @@ func main() {
 	}
 }
 
-func envOr(key, fallback string) string {
-	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
-		return val
-	}
-	return fallback
-}
-
-func envIntOr(key string, fallback int) int {
-	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
-		if parsed, err := strconv.Atoi(val); err == nil && parsed > 0 {
-			return parsed
-		}
-	}
-	return fallback
-}
