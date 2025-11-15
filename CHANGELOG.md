@@ -39,6 +39,7 @@
 - Issued unique `hub.verify_token` values for every subscription and reject hub challenges whose topic/token/lease don’t match what was registered (mirroring the configured HMAC secret).
 - Consolidated all logging through the internal logger package so runtime output shares consistent formatting regardless of entry point, including a blank spacer line before every timestamped entry for readability.
 - Added explicit logging after sending the hub challenge reply so the status/body echoed back to YouTube are captured.
+- Made the YouTube WebSub defaults configurable through environment variables or CLI flags so deployments are not tied to baked-in hub/callback values.
 ### Fixed
 - Persist `streamer.alias` when creating records and require it as the primary identifier so requests without names no longer lose the alias field.
 - Removed references to the deprecated `/api/youtube/new/subscribe` alias so the README only lists active endpoints.

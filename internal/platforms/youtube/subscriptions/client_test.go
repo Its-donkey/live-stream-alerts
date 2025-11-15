@@ -67,6 +67,48 @@ func TestNormaliseUnsubscribeRequestDoesNotOverrideProvidedValues(t *testing.T) 
 	}
 }
 
+func TestConfigureDefaultsOverridesValues(t *testing.T) {
+	original := Defaults{
+		HubURL:       DefaultHubURL,
+		CallbackURL:  DefaultCallbackURL,
+		LeaseSeconds: DefaultLease,
+		Mode:         DefaultMode,
+		Verify:       DefaultVerify,
+	}
+	t.Cleanup(func() {
+		ConfigureDefaults(original)
+	})
+
+	ConfigureDefaults(Defaults{
+		HubURL:       "https://override-hub",
+		CallbackURL:  "https://override-callback",
+		LeaseSeconds: 42,
+		Mode:         "sync-mode",
+		Verify:       "sync",
+	})
+
+	if DefaultHubURL != "https://override-hub" {
+		t.Fatalf("expected hub override, got %s", DefaultHubURL)
+	}
+	if DefaultCallbackURL != "https://override-callback" {
+		t.Fatalf("expected callback override, got %s", DefaultCallbackURL)
+	}
+	if DefaultLease != 42 {
+		t.Fatalf("expected lease override, got %d", DefaultLease)
+	}
+	if DefaultMode != "sync-mode" {
+		t.Fatalf("expected mode override, got %s", DefaultMode)
+	}
+	if DefaultVerify != "sync" {
+		t.Fatalf("expected verify override, got %s", DefaultVerify)
+	}
+
+	ConfigureDefaults(Defaults{})
+	if DefaultHubURL != "https://override-hub" {
+		t.Fatalf("blank override should be ignored")
+	}
+}
+
 func TestSubscribeYouTubeSuccess(t *testing.T) {
 	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {

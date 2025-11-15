@@ -16,13 +16,41 @@ import (
 	"live-stream-alerts/internal/platforms/youtube/websub"
 )
 
-const (
+var (
 	DefaultHubURL      = "https://pubsubhubbub.appspot.com/subscribe"
 	DefaultCallbackURL = "https://sharpen.live/alerts"
 	DefaultLease       = 864000 // 10 days in seconds (maximum for YouTube)
 	DefaultMode        = "subscribe"
 	DefaultVerify      = "async"
 )
+
+// Defaults represents the configurable hub parameters.
+type Defaults struct {
+	HubURL       string
+	CallbackURL  string
+	LeaseSeconds int
+	Mode         string
+	Verify       string
+}
+
+// ConfigureDefaults overrides the package defaults with the supplied values.
+func ConfigureDefaults(cfg Defaults) {
+	if strings.TrimSpace(cfg.HubURL) != "" {
+		DefaultHubURL = cfg.HubURL
+	}
+	if strings.TrimSpace(cfg.CallbackURL) != "" {
+		DefaultCallbackURL = cfg.CallbackURL
+	}
+	if cfg.LeaseSeconds > 0 {
+		DefaultLease = cfg.LeaseSeconds
+	}
+	if strings.TrimSpace(cfg.Mode) != "" {
+		DefaultMode = cfg.Mode
+	}
+	if strings.TrimSpace(cfg.Verify) != "" {
+		DefaultVerify = cfg.Verify
+	}
+}
 
 // YouTubeRequest models the fields required by YouTube's WebSub subscription flow.
 type YouTubeRequest struct {
@@ -39,7 +67,11 @@ type YouTubeRequest struct {
 
 // NormaliseSubscribeRequest applies the enforced defaults required by the system.
 func NormaliseSubscribeRequest(req *YouTubeRequest) {
-	req.Mode = "subscribe"
+	mode := strings.TrimSpace(DefaultMode)
+	if mode == "" {
+		mode = "subscribe"
+	}
+	req.Mode = mode
 	if strings.TrimSpace(req.HubURL) == "" {
 		req.HubURL = DefaultHubURL
 	}
