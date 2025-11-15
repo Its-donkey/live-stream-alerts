@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"os"
 	"os/signal"
 	"strconv"
@@ -13,7 +12,6 @@ import (
 	apiv1 "live-stream-alerts/internal/api/v1"
 	"live-stream-alerts/internal/httpserver"
 	"live-stream-alerts/internal/logging"
-	"live-stream-alerts/internal/platforms/youtube/subscriptions"
 	"live-stream-alerts/internal/streamers"
 )
 
@@ -25,22 +23,10 @@ func main() {
 	)
 	readWindow := 10 * time.Second
 
-	youtubeHubURL := flag.String("youtube-hub-url", envOr("YOUTUBE_HUB_URL", subscriptions.DefaultHubURL), "YouTube PubSubHubbub hub URL.")
-	youtubeCallbackURL := flag.String("youtube-callback-url", envOr("YOUTUBE_CALLBACK_URL", subscriptions.DefaultCallbackURL), "Callback URL registered with the hub.")
-	youtubeLeaseSeconds := flag.Int("youtube-lease-seconds", envIntOr("YOUTUBE_LEASE_SECONDS", subscriptions.DefaultLease), "Lease duration (seconds) requested from the hub.")
-	youtubeMode := flag.String("youtube-default-mode", envOr("YOUTUBE_DEFAULT_MODE", subscriptions.DefaultMode), "Default WebSub mode applied when not provided.")
-	youtubeVerify := flag.String("youtube-verify-mode", envOr("YOUTUBE_VERIFY_MODE", subscriptions.DefaultVerify), "Default WebSub verify strategy.")
+	// Configure YouTube WebSub defaults (flags + env).
+	configureYouTubeDefaults()
 
-	flag.Parse()
-
-	subscriptions.ConfigureDefaults(subscriptions.Defaults{
-		HubURL:       *youtubeHubURL,
-		CallbackURL:  *youtubeCallbackURL,
-		LeaseSeconds: *youtubeLeaseSeconds,
-		Mode:         *youtubeMode,
-		Verify:       *youtubeVerify,
-	})
-
+	// -----------------------------------------------------
 	router := apiv1.NewRouter(apiv1.Options{
 		Logger:        logger,
 		StreamersPath: streamers.DefaultFilePath,
