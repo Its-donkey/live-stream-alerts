@@ -14,6 +14,17 @@ A lightweight Go service that proxies YouTube WebSub subscriptions, stores strea
 2. Streamer data is appended to `data/streamers.json`. Provide a different path through `CreateOptions.FilePath` if you embed the handler elsewhere.
 3. (Optional) Build and host the standalone UI from the sibling project if you need a dashboard; it talks to these APIs over HTTP and no longer ships with the server binary (this repository intentionally stays API-only).
 
+## Configuration
+The WebSub defaults can be configured via environment variables or CLI flags (flags take precedence):
+
+| Flag | Environment variable | Description | Default |
+| ---- | -------------------- | ----------- | ------- |
+| `-youtube-hub-url` | `YOUTUBE_HUB_URL` | PubSubHubbub hub endpoint used for subscribe/unsubscribe flows. | `https://pubsubhubbub.appspot.com/subscribe` |
+| `-youtube-callback-url` | `YOUTUBE_CALLBACK_URL` | Callback URL that the hub invokes for alert delivery. | `https://sharpen.live/alerts` |
+| `-youtube-lease-seconds` | `YOUTUBE_LEASE_SECONDS` | Lease duration requested during subscribe/unsubscribe. | `864000` |
+| `-youtube-default-mode` | `YOUTUBE_DEFAULT_MODE` | WebSub mode enforced when omitted (typically `subscribe`). | `subscribe` |
+| `-youtube-verify-mode` | `YOUTUBE_VERIFY_MODE` | Verification strategy requested (`sync` or `async`). | `async` |
+
 ## API reference
 All HTTP routes are registered in `internal/api/v1/router.go`. Update the table below whenever an endpoint is added or altered so this README remains the single source of truth.
 
@@ -21,6 +32,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 | ------ | ---------------------------- | ----------- |
 | GET    | `/alerts`                    | Responds to YouTube PubSubHubbub verification challenges. |
 | POST   | `/api/youtube/subscribe`     | Proxies subscription requests to YouTube's hub after enforcing defaults. |
+| POST   | `/api/youtube/unsubscribe`   | Issues unsubscribe calls to YouTube's hub so channels stop sending alerts. |
 | POST   | `/api/youtube/channel`       | Resolves a YouTube `@handle` into its canonical channel ID. |
 | GET    | `/api/streamers`             | Returns every stored streamer record. |
 | POST   | `/api/streamers`             | Persists streamer metadata to `data/streamers.json`. |
@@ -44,6 +56,11 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
   - `callback` is pinned to `https://sharpen.live/alert`.
   - `mode` is forced to `"subscribe"`.
   - `leaseSeconds` falls back to `864000` (10 days) when omitted.
+- **Response:** Mirrors the upstream hub's status code, headers, and body. When the hub omits a body, the handler writes the upstream status text.
+
+### POST `/api/youtube/unsubscribe`
+- **Purpose:** Sends an unsubscribe request to YouTube's hub so the callback stops receiving push notifications for the provided topic.
+- **Request body:** Matches `POST /api/youtube/subscribe`; only `topic` is required and defaults mirror the subscribe handler.
 - **Response:** Mirrors the upstream hub's status code, headers, and body. When the hub omits a body, the handler writes the upstream status text.
 
 ### POST `/api/youtube/channel`
