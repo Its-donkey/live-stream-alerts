@@ -96,7 +96,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
     }
   }
   ```
-- **Server-managed fields:** `streamer.id` is derived from the alias by stripping non-alphanumeric characters. IDs, timestamps, and platform metadata are set by the server. Once the record is created it is immediately enriched with the channel handle and ID taken from the supplied URL (or by resolving the @handle), and the backend generates a fresh hub secret that it later uses for WebSub HMAC validation.
+- **Server-managed fields:** `streamer.id` is generated automatically (random alphanumeric string), so callers never supply or rely on alias-derived identifiers. IDs, timestamps, and platform metadata are set by the server. Once the record is created it is immediately enriched with the channel handle and ID taken from the supplied URL (or by resolving the @handle), and the backend generates a fresh hub secret that it later uses for WebSub HMAC validation.
 - **YouTube subscriptions:** After the record is stored the backend resolves any missing channel metadata, saves it back to `data/streamers.json`, and issues the PubSubHubbub subscription. Failures are logged but do not block the initial `201 Created` response.
 - **Languages:** When provided, entries must come from the supported language list (see `schema/streamers.schema.json`); duplicates and blank values are rejected.
 - **Validation:** `streamer.alias` must be non-empty and unique once cleaned (submitting a duplicate alias returns `409 Conflict`). The `platforms.url` value must be a valid YouTube channel URL when provided.

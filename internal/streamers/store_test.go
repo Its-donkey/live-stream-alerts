@@ -58,6 +58,20 @@ func TestAppendDuplicateID(t *testing.T) {
 	}
 }
 
+func TestAppendDuplicateAlias(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "streamers.json")
+
+	first := Record{Streamer: Streamer{Alias: "Edge Crafter"}}
+	if _, err := Append(path, first); err != nil {
+		t.Fatalf("append first: %v", err)
+	}
+	second := Record{Streamer: Streamer{Alias: "EdgeCrafter!!"}}
+	if _, err := Append(path, second); !errors.Is(err, ErrDuplicateAlias) {
+		t.Fatalf("expected duplicate alias error, got %v", err)
+	}
+}
+
 func TestUpdateFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "streamers.json")

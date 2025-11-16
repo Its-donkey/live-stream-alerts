@@ -9,8 +9,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 const (
@@ -83,6 +81,7 @@ var (
 	fileMu                 sync.Mutex
 	ErrDuplicateStreamerID = errors.New("streamer id already exists")
 	ErrStreamerNotFound    = errors.New("streamer not found")
+	ErrDuplicateAlias      = errors.New("streamer alias already exists")
 )
 
 // UpdateFields describes the mutable streamer fields.
@@ -115,15 +114,19 @@ func Append(path string, record Record) (Record, error) {
 	}
 
 	if record.Streamer.ID == "" {
-		record.Streamer.ID = uuid.NewString()
+		record.Streamer.ID = GenerateID()
 	}
 	now := time.Now().UTC()
 	record.CreatedAt = now
 	record.UpdatedAt = now
 
+	newAliasKey := NormaliseAlias(record.Streamer.Alias)
 	for _, existing := range fileData.Records {
 		if existing.Streamer.ID == record.Streamer.ID {
 			return Record{}, fmt.Errorf("%w: %s", ErrDuplicateStreamerID, record.Streamer.ID)
+		}
+		if newAliasKey != "" && newAliasKey == NormaliseAlias(existing.Streamer.Alias) {
+			return Record{}, fmt.Errorf("%w: %s", ErrDuplicateAlias, record.Streamer.Alias)
 		}
 	}
 
