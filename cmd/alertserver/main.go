@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -15,15 +18,20 @@ import (
 )
 
 func main() {
+	logFile, err := configureLogging()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to configure logging: %v\n", err)
+		os.Exit(1)
+	}
+	defer logFile.Close()
+
+	config.MustLoad("config.json")
 	logger := logging.New()
 	const (
 		addr = "127.0.0.1"
 		port = ":8880"
 	)
 	readWindow := 10 * time.Second
-
-	// Configure YouTube WebSub defaults (flags + env).
-	config.ConfigureYouTube()
 
 	// -----------------------------------------------------
 	router := apiv1.NewRouter(apiv1.Options{
@@ -71,3 +79,16 @@ func main() {
 	}
 }
 
+func configureLogging() (*os.File, error) {
+	const logFileName = "alertserver.log"
+	logPath := filepath.Join("data", logFileName)
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+		return nil, fmt.Errorf("create log directory: %w", err)
+	}
+	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("open log file: %w", err)
+	}
+	logging.SetDefaultWriter(io.MultiWriter(os.Stdout, file))
+	return file, nil
+}

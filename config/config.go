@@ -7,11 +7,6 @@ import (
 	"os"
 )
 
-// Config models the structure stored in config.json (or similar overrides).
-type Config struct {
-	YouTube YouTubeConfig `json:"youtube"`
-}
-
 // YouTubeConfig captures the WebSub-specific defaults persisted in config files.
 type YouTubeConfig struct {
 	HubURL       string `json:"hub_url"`
@@ -21,14 +16,14 @@ type YouTubeConfig struct {
 	Verify       string `json:"verify"`
 }
 
-var C Config // exported global config
+var YT YouTubeConfig // exported global config
 
 func MustLoad(path string) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := json.Unmarshal(data, &C); err != nil {
+	if err := json.Unmarshal(data, &YT); err != nil {
 		log.Fatal(err)
 	}
 }

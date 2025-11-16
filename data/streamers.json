@@ -259,28 +259,6 @@
     },
     {
       "streamer": {
-        "id": "SharpenRightServicesLLCMikeWhite",
-        "alias": "Sharpen Right Services LLC - Mike White",
-        "description": "Sharpen Right Services LLC - Mike White located in League City, Texas.  We are a home based, mobile and mail order sharpening service; specializing in sharpe...\n\nPlatforms: www.youtube.com (https://www.youtube.com/@sharpenrightservicesllc)",
-        "firstName": "",
-        "lastName": "",
-        "email": "",
-        "languages": [
-          "English"
-        ]
-      },
-      "platforms": {
-        "youtube": {
-          "handle": "@sharpenrightservicesllc",
-          "channelId": "UC7d6BuAfHKTLR1l2SSg6HkA",
-          "hubSecret": "2282642cdbd239fa105ed4734cee6a92"
-        }
-      },
-      "createdAt": "2025-11-11T13:23:35.241424Z",
-      "updatedAt": "2025-11-11T13:23:35.241424Z"
-    },
-    {
-      "streamer": {
         "id": "iSharpen",
         "alias": "iSharpen",
         "description": "I'm Baz, I sharpen knives at Findon Precision Knife Sharpening in Adelaide, South Australia. Visit https://isharpen.shop/Contact:Mobile/Cell phone (or WhatsA...\n\nPlatforms: www.youtube.com (https://www.youtube.com/@iSharpen)",
@@ -348,27 +326,26 @@
     },
     {
       "streamer": {
-        "id": "SharpenDev",
-        "alias": "SharpenDev",
+        "id": "SharpenRightServicesLLCMikeWhite",
+        "alias": "Sharpen Right Services LLC - Mike White",
         "description": "Sharpening livestreams and tutorials.",
         "firstName": "",
         "lastName": "",
         "email": "",
         "languages": [
-          "English",
-          "Japanese"
+          "English"
         ]
       },
       "platforms": {
         "youtube": {
-          "handle": "@SharpenDev",
-          "channelId": "UCmFeU-oQ748Ue61z5qBWLIw",
-          "hubSecret": "iB8z7V8krv84lizGRRaGcQkhROP-O-5k",
-          "hubLeaseRenewalDue": "2025-11-14T06:20:09Z"
+          "handle": "@sharpenrightservicesllc",
+          "channelId": "UC7d6BuAfHKTLR1l2SSg6HkA",
+          "hubSecret": "fx-kFKjETulZ_fdRSjrDs66t-68yeXCd",
+          "hubLeaseRenewalDue": "2025-11-15T15:51:43Z"
         }
       },
-      "createdAt": "2025-11-14T06:20:08.07048Z",
-      "updatedAt": "2025-11-14T06:20:09.387755Z"
+      "createdAt": "2025-11-15T15:51:42.157625Z",
+      "updatedAt": "2025-11-15T15:51:43.364305Z"
     }
   ]
 }

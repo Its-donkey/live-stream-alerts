@@ -2,12 +2,15 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"live-stream-alerts/internal/logging"
+	"live-stream-alerts/internal/platforms/youtube/subscriptions"
 	"live-stream-alerts/internal/streamers"
 )
 
@@ -17,7 +20,7 @@ type deleteRequest struct {
 	} `json:"streamer"`
 }
 
-func deleteStreamer(w http.ResponseWriter, r *http.Request, path string, logger logging.Logger) {
+func deleteStreamer(w http.ResponseWriter, r *http.Request, path string, logger logging.Logger, youtubeClient *http.Client, youtubeHubURL string) {
 	// Enforce method (defensive check; switch already filtered by method)
 	if r.Method != http.MethodDelete {
 		w.Header().Set("Allow", http.MethodDelete)
@@ -38,6 +41,40 @@ func deleteStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 	if bodyID == "" {
 		http.Error(w, "streamer.id is required in body", http.StatusBadRequest)
 		return
+	}
+
+	record, err := streamers.Get(path, bodyID)
+	if err != nil {
+		switch {
+		case errors.Is(err, streamers.ErrStreamerNotFound):
+			http.Error(w, "streamer not found", http.StatusNotFound)
+			return
+		default:
+			if logger != nil {
+				logger.Printf("failed to load streamer %s: %v", bodyID, err)
+			}
+			http.Error(w, "failed to load streamer", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if record.Platforms.YouTube != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+
+		unsubOpts := subscriptions.Options{
+			Client: youtubeClient,
+			HubURL: youtubeHubURL,
+			Logger: logger,
+			Mode:   "unsubscribe",
+		}
+		if err := subscriptions.ManageSubscription(ctx, record, unsubOpts); err != nil {
+			if logger != nil {
+				logger.Printf("failed to unsubscribe alerts for %s: %v", record.Streamer.ID, err)
+			}
+			http.Error(w, "failed to unsubscribe alerts", http.StatusBadGateway)
+			return
+		}
 	}
 
 	// Perform delete via streamers.Delete

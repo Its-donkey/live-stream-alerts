@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -19,6 +20,17 @@ func TestNewWithWriterInsertsLeadingNewline(t *testing.T) {
 	}
 	if !bytes.Contains(buf.Bytes(), []byte("hello world")) {
 		t.Fatalf("expected log body to contain message, got %q", got)
+	}
+}
+
+func TestSetDefaultWriterAffectsNew(t *testing.T) {
+	var buf bytes.Buffer
+	SetDefaultWriter(&buf)
+	t.Cleanup(func() { SetDefaultWriter(os.Stdout) })
+	logger := New()
+	logger.Printf("captured")
+	if !strings.Contains(buf.String(), "captured") {
+		t.Fatalf("expected log output to be written to buffer, got %q", buf.String())
 	}
 }
 

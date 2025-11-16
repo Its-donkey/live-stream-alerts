@@ -13,6 +13,7 @@
 - Derived `streamer.id` from the alias by stripping whitespace/punctuation and tightened the schema to enforce alphanumeric IDs.
 - Reject duplicate streamer aliases by enforcing unique cleaned IDs during persistence and documenting the resulting `409 Conflict` behavior.
 - Added `/api/youtube/metadata` so tooling can fetch channel summaries and auto-fill the description/name/YouTube handle fields when a URL is entered.
+- Stored every YouTube PubSubHubbub request field (topic/callback/hub/verify mode/lease duration) in streamer records and documented the schema so the alert server can persist and inspect future subscription attempts without losing context.
 - Added `streamer.languages` to the schema/storage plus validation so submissions only include supported language codes.
 - Automatically subscribes YouTube channels (via PubSubHubbub) whenever a newly created streamer includes YouTube platform data, resolving channel IDs from handles when needed.
 - Added a JSON schema (`schema/streamers.schema.json`) and typed storage layer for streamers so data persists with server-managed IDs and timestamps.
@@ -31,8 +32,14 @@
 - Renamed the metadata scraping endpoint to `/api/youtube/metadata` (including handler types) so the path and code align with what the endpoint returns.
 - Removed the `createdAt` requirement from `DELETE /api/streamers/{id}` so operators only need to provide the streamer ID when deleting records.
 - The subscribe handler now mirrors the hub's HTTP response (body/status) to the API client and falls back to the upstream status text when the hub omits a body.
+- Consolidated the YouTube subscribe/unsubscribe handlers into a single JSON proxy, defaulting hub settings consistently and relocating lease tracking into the subscriptions package.
+- Validation errors for `/api/youtube/subscribe` and `/api/youtube/unsubscribe` now surface as `400 Bad Request` responses so clients can correct their payloads instead of seeing `502 Bad Gateway`.
+- `/api/youtube/unsubscribe` no longer requests a lease duration, allowing hub callbacks that omit `hub.lease_seconds` to complete successfully.
+- YouTube hub verification now skips lease-duration comparisons (and lease writes) for unsubscribe callbacks so removing a subscription no longer fails or records a false renewal.
+- Programmatic YouTube subscriptions now reuse the configured verify mode and lease duration so hub requests keep honoring `config.json` overrides.
 - Normalized all YouTube WebSub defaults (callback URL, lease duration, verification mode) inside the handler so clients can omit them safely.
 - Alert verification logging now includes the exact challenge response body so the terminal reflects what was sent back to YouTube.
+- Server output and logs are now mirrored into `data/alertserver.log` so operational history persists across restarts.
 - Accepts `/alert` as an alias for `/alerts` so PubSubHubBub callbacks from older reverse-proxy configs are handled correctly.
 - Fixed the router and verification handler so both `/alert` and `/alerts` paths are actually registered, preventing 404s when Google hits the legacy plural route.
 - Expanded YouTube hub verification logging to include the full HTTP dump and planned response so challenges can be reviewed before they’re sent.
@@ -40,6 +47,7 @@
 - Consolidated all logging through the internal logger package so runtime output shares consistent formatting regardless of entry point, including a blank spacer line before every timestamped entry for readability.
 - Added explicit logging after sending the hub challenge reply so the status/body echoed back to YouTube are captured.
 - Made the YouTube WebSub defaults configurable through environment variables or CLI flags so deployments are not tied to baked-in hub/callback values.
+- DELETE `/api/streamers` now unsubscribes the corresponding YouTube WebSub feed before removing the record so PubSubHubbub callbacks stop immediately.
 ### Fixed
 - Persist `streamer.alias` when creating records and require it as the primary identifier so requests without names no longer lose the alias field.
 - Removed references to the deprecated `/api/youtube/new/subscribe` alias so the README only lists active endpoints.
@@ -49,4 +57,5 @@
 - Restored the YouTube metadata handler import so `/api/youtube/metadata` compiles and keeps using the dedicated scraping package.
 - Registered `/api/streamers/` alongside `/api/streamers` so DELETE requests to `/api/streamers/{id}` reach the handler instead of 404ing.
 - Restored the subscribe/unsubscribe defaulting behavior so `NormaliseSubscribeRequest` and `NormaliseUnsubscribeRequest` only fill in blank fields, allowing clients to override callback/hub/verify/lease values.
+- Ensured `ManageSubscription` forwards the configured or stored lease duration so YouTube hub calls keep the intended 10-day renewal window instead of falling back to the hub default.
 - DELETE `/api/streamers/{id}` now validates `streamer.createdAt` locally so malformed timestamps return `400 Bad Request` instead of surfacing as `500` errors.

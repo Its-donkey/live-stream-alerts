@@ -1,4 +1,4 @@
-package store
+package subscriptions
 
 import (
 	"path/filepath"

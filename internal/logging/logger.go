@@ -31,11 +31,16 @@ type newlineWriter struct {
 	w  io.Writer
 }
 
+var (
+	defaultWriter   io.Writer = os.Stdout
+	defaultWriterMu sync.RWMutex
+)
+
 const maxLoggedResponseBody = 4096
 
 // New returns a Logger that writes to stdout using Go's default date/time flags.
 func New() Logger {
-	return NewWithWriter(os.Stdout)
+	return NewWithWriter(getDefaultWriter())
 }
 
 // NewWithWriter builds a Logger that writes to the provided io.Writer and
@@ -46,6 +51,23 @@ func NewWithWriter(w io.Writer) Logger {
 	}
 	adapter := &newlineWriter{w: w}
 	return &stdLogger{base: log.New(adapter, "", log.LstdFlags)}
+}
+
+// SetDefaultWriter overrides the writer used by New().
+func SetDefaultWriter(w io.Writer) {
+	defaultWriterMu.Lock()
+	defer defaultWriterMu.Unlock()
+	if w == nil {
+		defaultWriter = os.Stdout
+		return
+	}
+	defaultWriter = w
+}
+
+func getDefaultWriter() io.Writer {
+	defaultWriterMu.RLock()
+	defer defaultWriterMu.RUnlock()
+	return defaultWriter
 }
 
 // AsStdLogger returns the underlying *log.Logger when available so packages

@@ -77,6 +77,57 @@ func TestHandleSubscriptionConfirmationSuccess(t *testing.T) {
 	}
 }
 
+func TestHandleSubscriptionConfirmationSkipsLeaseForUnsubscribe(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "streamers.json")
+	_, err := streamers.Append(path, streamers.Record{
+		Streamer: streamers.Streamer{
+			Alias:     "Test",
+			FirstName: "T",
+			LastName:  "User",
+			Email:     "test@example.com",
+		},
+		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{ChannelID: "UC123", Handle: "@test"}},
+	})
+	if err != nil {
+		t.Fatalf("append streamer: %v", err)
+	}
+
+	token := "token-unsub"
+	challenge := "challenge"
+	topic := "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC123"
+	websub.RegisterExpectation(websub.Expectation{VerifyToken: token, Topic: topic, Mode: "unsubscribe", LeaseSeconds: 60})
+	t.Cleanup(func() { websub.CancelExpectation(token) })
+
+	values := url.Values{}
+	values.Set("hub.challenge", challenge)
+	values.Set("hub.verify_token", token)
+	values.Set("hub.topic", topic)
+	values.Set("hub.mode", "unsubscribe")
+
+	req := httptest.NewRequest(http.MethodGet, "/alert?"+values.Encode(), nil)
+	rr := httptest.NewRecorder()
+
+	handled := HandleSubscriptionConfirmation(rr, req, SubscriptionConfirmationOptions{StreamersPath: path, Logger: &memoryLogger{}})
+	if !handled {
+		t.Fatalf("expected request to be handled")
+	}
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	records, err := streamers.List(path)
+	if err != nil {
+		t.Fatalf("list streamers: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected one record")
+	}
+	if records[0].Platforms.YouTube.HubLeaseRenewalDue != "" {
+		t.Fatalf("expected lease renewal timestamp to remain empty for unsubscribe")
+	}
+}
+
 func TestHandleSubscriptionConfirmationValidatesRequests(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/alert", nil)

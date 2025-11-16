@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"live-stream-alerts/config"
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/subscriptions"
 	"live-stream-alerts/internal/streamers"
@@ -58,21 +59,40 @@ func FromURL(ctx context.Context, record streamers.Record, channelURL string, op
 
 	hubSecret := generateHubSecret()
 
+	topic := fmt.Sprintf("https://www.youtube.com/xml/feeds/videos.xml?channel_id=%s", channelID)
+	callbackURL := strings.TrimSpace(config.YT.CallbackURL)
+	hubURL := strings.TrimSpace(opts.HubURL)
+	if hubURL == "" {
+		hubURL = strings.TrimSpace(config.YT.HubURL)
+	}
+	verifyMode := strings.TrimSpace(config.YT.Verify)
+	if verifyMode == "" {
+		verifyMode = "async"
+	}
+	leaseSeconds := config.YT.LeaseSeconds
+
 	updatedRecord, err := setYouTubePlatform(opts.StreamersPath, record.Streamer.ID, streamers.YouTubePlatform{
-		Handle:    handle,
-		ChannelID: channelID,
-		HubSecret: hubSecret,
+		Handle:       handle,
+		ChannelID:    channelID,
+		HubSecret:    hubSecret,
+		Topic:        topic,
+		CallbackURL:  callbackURL,
+		HubURL:       hubURL,
+		VerifyMode:   verifyMode,
+		LeaseSeconds: leaseSeconds,
 	})
 	if err != nil {
 		return err
 	}
 
 	subscribeOpts := subscriptions.Options{
-		Client: client,
-		HubURL: opts.HubURL,
-		Logger: opts.Logger,
+		Client:       client,
+		HubURL:       opts.HubURL,
+		Logger:       opts.Logger,
+		Mode:         "subscribe",
+		LeaseSeconds: leaseSeconds,
 	}
-	return subscriptions.Subscribe(ctx, updatedRecord, subscribeOpts)
+	return subscriptions.ManageSubscription(ctx, updatedRecord, subscribeOpts)
 }
 
 func parseYouTubeURL(raw string) (handle string, channelID string, err error) {
@@ -112,12 +132,8 @@ func setYouTubePlatform(path string, streamerID string, yt streamers.YouTubePlat
 			if !strings.EqualFold(file.Records[i].Streamer.ID, streamerID) {
 				continue
 			}
-			file.Records[i].Platforms.YouTube = &streamers.YouTubePlatform{
-				Handle:             yt.Handle,
-				ChannelID:          yt.ChannelID,
-				HubSecret:          yt.HubSecret,
-				HubLeaseRenewalDue: yt.HubLeaseRenewalDue,
-			}
+			copy := yt
+			file.Records[i].Platforms.YouTube = &copy
 			file.Records[i].UpdatedAt = time.Now().UTC()
 			updated = file.Records[i]
 			return nil

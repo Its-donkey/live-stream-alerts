@@ -1,3 +1,4 @@
+// file name: internal/platforms/youtube/handlers/websub_alerts.go
 package handlers
 
 import (
@@ -9,7 +10,7 @@ import (
 	"time"
 
 	"live-stream-alerts/internal/logging"
-	youtubestore "live-stream-alerts/internal/platforms/youtube/store"
+	youtubesub "live-stream-alerts/internal/platforms/youtube/subscriptions"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 )
 
@@ -58,7 +59,8 @@ func HandleSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, opts
 
 	leaseParam := strings.TrimSpace(query.Get("hub.lease_seconds"))
 	leaseValue := 0
-	if leaseParam != "" {
+	leaseProvided := leaseParam != ""
+	if leaseProvided {
 		parsedLease, err := strconv.Atoi(leaseParam)
 		if err != nil {
 			http.Error(w, "invalid hub.lease_seconds", http.StatusBadRequest)
@@ -66,12 +68,14 @@ func HandleSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, opts
 		}
 		leaseValue = parsedLease
 	}
-	if exp.LeaseSeconds > 0 && leaseValue != exp.LeaseSeconds {
+	expIsUnsubscribe := strings.EqualFold(exp.Mode, "unsubscribe")
+	if leaseProvided && exp.LeaseSeconds > 0 && leaseValue != exp.LeaseSeconds && !expIsUnsubscribe {
 		http.Error(w, "hub.lease_seconds mismatch", http.StatusBadRequest)
 		return true
 	}
 
 	mode := strings.TrimSpace(query.Get("hub.mode"))
+	isUnsubscribe := strings.EqualFold(mode, "unsubscribe")
 	if exp.Mode != "" && !strings.EqualFold(mode, exp.Mode) {
 		http.Error(w, "hub.mode mismatch", http.StatusBadRequest)
 		return true
@@ -80,7 +84,7 @@ func HandleSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, opts
 	if logger != nil {
 		logger.Printf(
 			"Responding to hub challenge: mode=%s topic=%s lease=%s token=%s body=%q",
-			query.Get("hub.mode"),
+			mode,
 			query.Get("hub.topic"),
 			query.Get("hub.lease_seconds"),
 			query.Get("hub.verify_token"),
@@ -117,8 +121,8 @@ func HandleSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, opts
 	if channelID == "" {
 		channelID = websub.ExtractChannelID(topic)
 	}
-	if channelID != "" {
-		if err := youtubestore.RecordLease(opts.StreamersPath, channelID, verifiedAt); err != nil && logger != nil {
+	if channelID != "" && !isUnsubscribe && leaseProvided {
+		if err := youtubesub.RecordLease(opts.StreamersPath, channelID, verifiedAt); err != nil && logger != nil {
 			logger.Printf("failed to record hub lease for %s: %v", channelID, err)
 		}
 	}
@@ -151,7 +155,11 @@ func HandleSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, opts
 		if displayTopic == "" {
 			displayTopic = exp.Topic
 		}
-		logger.Printf("YouTube alerts subscribed for %s (%s)", alias, displayTopic)
+		if isUnsubscribe {
+			logger.Printf("YouTube alerts unsubscribed for %s (%s)", alias, displayTopic)
+		} else {
+			logger.Printf("YouTube alerts subscribed for %s (%s)", alias, displayTopic)
+		}
 	}
 
 	return true

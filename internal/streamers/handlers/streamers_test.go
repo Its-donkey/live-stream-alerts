@@ -8,8 +8,22 @@ import (
 	"path/filepath"
 	"testing"
 
+	"live-stream-alerts/config"
 	"live-stream-alerts/internal/streamers"
 )
+
+func configureYouTubeDefaults(t *testing.T, hubURL string) {
+	t.Helper()
+	original := config.YT
+	config.YT = config.YouTubeConfig{
+		HubURL:       hubURL,
+		CallbackURL:  "https://callback.example.com/alerts",
+		LeaseSeconds: 60,
+		Mode:         "subscribe",
+		Verify:       "async",
+	}
+	t.Cleanup(func() { config.YT = original })
+}
 
 func TestStreamersHandlerGetListsStreamers(t *testing.T) {
 	dir := t.TempDir()
@@ -109,6 +123,20 @@ func TestStreamersHandlerPostSuccess(t *testing.T) {
 func TestStreamersHandlerDeleteSuccess(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "streamers.json")
+	var unsubCalled bool
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("parse form: %v", err)
+		}
+		if got := r.Form.Get("hub.mode"); got != "unsubscribe" {
+			t.Fatalf("expected hub.mode to be unsubscribe, got %s", got)
+		}
+		unsubCalled = true
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer hub.Close()
+	configureYouTubeDefaults(t, hub.URL)
+
 	record, err := streamers.Append(path, streamers.Record{
 		Streamer: streamers.Streamer{
 			ID:        "ToDelete",
@@ -117,12 +145,22 @@ func TestStreamersHandlerDeleteSuccess(t *testing.T) {
 			LastName:  "Me",
 			Email:     "delete@example.com",
 		},
+		Platforms: streamers.Platforms{
+			YouTube: &streamers.YouTubePlatform{
+				ChannelID: "UC555",
+				HubSecret: "secret",
+			},
+		},
 	})
 	if err != nil {
 		t.Fatalf("append: %v", err)
 	}
 
-	handler := StreamersHandler(StreamOptions{FilePath: path})
+	handler := StreamersHandler(StreamOptions{
+		FilePath:      path,
+		YouTubeClient: hub.Client(),
+		YouTubeHubURL: hub.URL,
+	})
 	payload := map[string]any{
 		"streamer": map[string]string{
 			"id": record.Streamer.ID,
@@ -148,6 +186,66 @@ func TestStreamersHandlerDeleteSuccess(t *testing.T) {
 	}
 	if len(records) != 0 {
 		t.Fatalf("expected record to be deleted, still have %d", len(records))
+	}
+	if !unsubCalled {
+		t.Fatalf("expected unsubscribe to be called before deletion")
+	}
+}
+
+func TestStreamersHandlerDeleteUnsubscribeFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "streamers.json")
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer hub.Close()
+	configureYouTubeDefaults(t, hub.URL)
+
+	record, err := streamers.Append(path, streamers.Record{
+		Streamer: streamers.Streamer{
+			ID:        "FailDelete",
+			Alias:     "FailDelete",
+			FirstName: "Delete",
+			LastName:  "Me",
+			Email:     "delete@example.com",
+		},
+		Platforms: streamers.Platforms{
+			YouTube: &streamers.YouTubePlatform{
+				ChannelID: "UCfail",
+				HubSecret: "secret",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	handler := StreamersHandler(StreamOptions{
+		FilePath:      path,
+		YouTubeClient: hub.Client(),
+		YouTubeHubURL: hub.URL,
+	})
+	body, _ := json.Marshal(map[string]any{
+		"streamer": map[string]any{
+			"id": record.Streamer.ID,
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/streamers/"+record.Streamer.ID, bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502 when unsubscribe fails, got %d", rr.Code)
+	}
+
+	records, err := streamers.List(path)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected record to remain when unsubscribe fails, found %d", len(records))
 	}
 }
 

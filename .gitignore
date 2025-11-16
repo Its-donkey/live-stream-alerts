@@ -25,3 +25,4 @@ frontend/
 *.zip
 listfuncs/
 streamers.json
+data/alertserver.log
