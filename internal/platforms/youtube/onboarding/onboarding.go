@@ -86,10 +86,11 @@ func FromURL(ctx context.Context, record streamers.Record, channelURL string, op
 	}
 
 	subscribeOpts := subscriptions.Options{
-		Client: client,
-		HubURL: opts.HubURL,
-		Logger: opts.Logger,
-		Mode:   "subscribe",
+		Client:       client,
+		HubURL:       opts.HubURL,
+		Logger:       opts.Logger,
+		Mode:         "subscribe",
+		LeaseSeconds: leaseSeconds,
 	}
 	return subscriptions.ManageSubscription(ctx, updatedRecord, subscribeOpts)
 }

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -83,6 +84,65 @@ func TestSubscribeSuccess(t *testing.T) {
 		}},
 	}
 	if err := ManageSubscription(context.Background(), record, Options{Client: hub.Client(), HubURL: hub.URL, Mode: "subscribe"}); err != nil {
+		t.Fatalf("subscribe returned error: %v", err)
+	}
+}
+
+func TestSubscribeUsesStoredLeaseSeconds(t *testing.T) {
+	const storedLease = 7200
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("parse form: %v", err)
+		}
+		if got := r.Form.Get("hub.lease_seconds"); got != strconv.Itoa(storedLease) {
+			t.Fatalf("expected lease seconds %d, got %s", storedLease, got)
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer hub.Close()
+
+	configureTestYouTube(t, hub.URL)
+	record := streamers.Record{
+		Streamer: streamers.Streamer{Alias: "Test"},
+		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{
+			ChannelID:    "UC999",
+			LeaseSeconds: storedLease,
+		}},
+	}
+
+	if err := ManageSubscription(context.Background(), record, Options{Client: hub.Client(), HubURL: hub.URL, Mode: "subscribe"}); err != nil {
+		t.Fatalf("subscribe returned error: %v", err)
+	}
+}
+
+func TestSubscribeUsesOptionLeaseSecondsWhenRecordMissing(t *testing.T) {
+	const configuredLease = 864000
+	const requestLease = 3600
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("parse form: %v", err)
+		}
+		if got := r.Form.Get("hub.lease_seconds"); got != strconv.Itoa(requestLease) {
+			t.Fatalf("expected lease seconds %d, got %s", requestLease, got)
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer hub.Close()
+
+	configureTestYouTube(t, hub.URL)
+	config.YT.LeaseSeconds = configuredLease
+	record := streamers.Record{
+		Streamer: streamers.Streamer{Alias: "Test"},
+		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{
+			ChannelID: "UC777",
+		}},
+	}
+
+	if err := ManageSubscription(
+		context.Background(),
+		record,
+		Options{Client: hub.Client(), HubURL: hub.URL, Mode: "subscribe", LeaseSeconds: requestLease},
+	); err != nil {
 		t.Fatalf("subscribe returned error: %v", err)
 	}
 }

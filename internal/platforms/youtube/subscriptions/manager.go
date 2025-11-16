@@ -107,17 +107,7 @@ func ManageSubscription(ctx context.Context, record streamers.Record, opts Optio
 	if verify == "" {
 		verify = "async"
 	}
-	leaseSeconds := yt.LeaseSeconds
-	if leaseSeconds <= 0 {
-		leaseSeconds = opts.LeaseSeconds
-	}
-	if strings.EqualFold(mode, "subscribe") {
-		if leaseSeconds <= 0 {
-			leaseSeconds = config.YT.LeaseSeconds
-		}
-	} else {
-		leaseSeconds = 0
-	}
+	leaseSeconds := resolveLeaseSeconds(mode, yt, opts)
 	hubURL := strings.TrimSpace(yt.HubURL)
 	if hubURL == "" {
 		hubURL = strings.TrimSpace(opts.HubURL)
@@ -148,4 +138,17 @@ func ManageSubscription(ctx context.Context, record streamers.Record, opts Optio
 		string(body),
 	)
 	return nil
+}
+
+func resolveLeaseSeconds(mode string, yt *streamers.YouTubePlatform, opts Options) int {
+	if !strings.EqualFold(mode, "subscribe") {
+		return 0
+	}
+	if yt != nil && yt.LeaseSeconds > 0 {
+		return yt.LeaseSeconds
+	}
+	if opts.LeaseSeconds > 0 {
+		return opts.LeaseSeconds
+	}
+	return config.YT.LeaseSeconds
 }
