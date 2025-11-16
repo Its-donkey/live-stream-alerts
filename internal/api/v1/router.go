@@ -3,11 +3,10 @@ package v1
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"live-stream-alerts/internal/logging"
-	"live-stream-alerts/internal/platforms/youtube/liveinfo"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
+	"live-stream-alerts/internal/platforms/youtube/liveinfo"
 	streamershandlers "live-stream-alerts/internal/streamers/handlers"
 )
 
@@ -25,7 +24,7 @@ type Options struct {
 	Logger        logging.Logger
 	RuntimeInfo   RuntimeInfo
 	StreamersPath string
-	YouTubeAPIKey string
+	VideoLookup   youtubehandlers.LiveVideoLookup
 }
 
 // NewRouter constructs the HTTP router for the public API.
@@ -49,9 +48,9 @@ func NewRouter(opts Options) http.Handler {
 	}))
 	mux.Handle("/api/streamers", streamersHandler)
 
-	var videoLookup youtubehandlers.LiveVideoLookup
-	if key := strings.TrimSpace(opts.YouTubeAPIKey); key != "" {
-		videoLookup = &liveinfo.Client{APIKey: key}
+	videoLookup := opts.VideoLookup
+	if videoLookup == nil {
+		videoLookup = &liveinfo.Client{}
 	}
 
 	alertsHandler := handleAlerts(handleAlertsOptions{

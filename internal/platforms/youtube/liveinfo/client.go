@@ -3,46 +3,44 @@ package liveinfo
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 )
 
-// Client fetches live metadata for YouTube videos via the Data API.
+// Client fetches live metadata by scraping YouTube watch pages (no API key required).
 type Client struct {
-	APIKey     string
 	HTTPClient *http.Client
 	BaseURL    string
 }
 
-// VideoInfo describes the metadata returned for a video.
+// VideoInfo represents the parsed metadata for a video.
 type VideoInfo struct {
 	ID                   string
 	ChannelID            string
 	Title                string
 	LiveBroadcastContent string
 	ActualStartTime      time.Time
-	ScheduledStartTime   time.Time
 }
 
-// IsLive returns true when the video is currently live (or has just started).
+// IsLive reports whether the video is currently live.
 func (v VideoInfo) IsLive() bool {
-	if v.LiveBroadcastContent != "" && strings.EqualFold(v.LiveBroadcastContent, "live") {
+	if strings.EqualFold(v.LiveBroadcastContent, "live") {
 		return true
 	}
 	return !v.ActualStartTime.IsZero()
 }
 
-// Fetch returns live metadata for the provided video IDs.
+// Fetch retrieves metadata for each supplied video ID.
 func (c *Client) Fetch(ctx context.Context, videoIDs []string) (map[string]VideoInfo, error) {
 	ids := sanitizeIDs(videoIDs)
 	if len(ids) == 0 {
 		return map[string]VideoInfo{}, nil
-	}
-	if strings.TrimSpace(c.APIKey) == "" {
-		return nil, fmt.Errorf("youtube data api key is required")
 	}
 
 	httpClient := c.HTTPClient
@@ -51,64 +49,120 @@ func (c *Client) Fetch(ctx context.Context, videoIDs []string) (map[string]Video
 	}
 	baseURL := c.BaseURL
 	if baseURL == "" {
-		baseURL = "https://www.googleapis.com/youtube/v3/videos"
+		baseURL = "https://www.youtube.com/watch"
 	}
 
-	result := make(map[string]VideoInfo, len(ids))
-	for start := 0; start < len(ids); start += 50 {
-		end := start + 50
-		if end > len(ids) {
-			end = len(ids)
-		}
-		batch := ids[start:end]
-		batchRes, err := c.fetchBatch(ctx, httpClient, baseURL, batch)
+	results := make(map[string]VideoInfo, len(ids))
+	var firstErr error
+	for _, id := range ids {
+		info, err := c.fetchSingle(ctx, httpClient, baseURL, id)
 		if err != nil {
-			return nil, err
+			if firstErr == nil {
+				firstErr = fmt.Errorf("fetch %s: %w", id, err)
+			}
+			continue
 		}
-		for k, v := range batchRes {
-			result[k] = v
-		}
+		results[id] = info
 	}
-	return result, nil
+	if len(results) == 0 && firstErr != nil {
+		return nil, firstErr
+	}
+	return results, nil
 }
 
-func (c *Client) fetchBatch(ctx context.Context, client *http.Client, baseURL string, ids []string) (map[string]VideoInfo, error) {
-	params := url.Values{}
-	params.Set("part", "snippet,liveStreamingDetails")
-	params.Set("id", strings.Join(ids, ","))
-	params.Set("key", strings.TrimSpace(c.APIKey))
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"?"+params.Encode(), nil)
+func (c *Client) fetchSingle(ctx context.Context, client *http.Client, baseURL, id string) (VideoInfo, error) {
+	watchURL, err := url.Parse(baseURL)
 	if err != nil {
-		return nil, err
+		return VideoInfo{}, err
 	}
+	q := watchURL.Query()
+	q.Set("v", id)
+	watchURL.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, watchURL.String(), nil)
+	if err != nil {
+		return VideoInfo{}, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; LiveStreamAlerts/1.0)")
+	req.Header.Set("Accept-Language", "en")
+
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return VideoInfo{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("youtube api returned %s", resp.Status)
+		return VideoInfo{}, fmt.Errorf("unexpected status %s", resp.Status)
 	}
 
-	var payload apiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		return VideoInfo{}, err
 	}
 
-	items := make(map[string]VideoInfo, len(payload.Items))
-	for _, item := range payload.Items {
-		info := VideoInfo{
-			ID:                   item.ID,
-			ChannelID:            item.Snippet.ChannelID,
-			Title:                item.Snippet.Title,
-			LiveBroadcastContent: item.Snippet.LiveBroadcastContent,
-			ActualStartTime:      parseRFC3339(item.LiveStreamingDetails.ActualStartTime),
-			ScheduledStartTime:   parseRFC3339(item.LiveStreamingDetails.ScheduledStartTime),
+	playerJSON, err := extractPlayerResponse(string(body))
+	if err != nil {
+		return VideoInfo{}, err
+	}
+
+	var payload playerResponse
+	if err := json.Unmarshal([]byte(playerJSON), &payload); err != nil {
+		return VideoInfo{}, fmt.Errorf("decode player response: %w", err)
+	}
+
+	info := VideoInfo{
+		ID:        id,
+		ChannelID: payload.VideoDetails.ChannelID,
+		Title:     payload.VideoDetails.Title,
+	}
+	if payload.VideoDetails.IsLiveContent || payload.VideoDetails.IsLive {
+		info.LiveBroadcastContent = "live"
+	}
+	info.ActualStartTime = parseRFC3339(payload.Microformat.PlayerMicroformatRenderer.LiveBroadcastDetails.StartTimestamp)
+	return info, nil
+}
+
+func extractPlayerResponse(body string) (string, error) {
+	marker := "ytInitialPlayerResponse"
+	idx := strings.Index(body, marker)
+	if idx == -1 {
+		return "", errors.New("player response not found")
+	}
+	start := idx + len(marker)
+	for start < len(body) && (body[start] == ' ' || body[start] == '\n' || body[start] == '\r' || body[start] == '\t' || body[start] == '=') {
+		start++
+	}
+	for start < len(body) && unicode.IsSpace(rune(body[start])) {
+		start++
+	}
+	if start >= len(body) {
+		return "", errors.New("player response malformed")
+	}
+	for start < len(body) && body[start] != '{' {
+		start++
+	}
+	if start >= len(body) {
+		return "", errors.New("player response JSON missing")
+	}
+
+	braces := 0
+	end := -1
+	for i := start; i < len(body); i++ {
+		switch body[i] {
+		case '{':
+			braces++
+		case '}':
+			braces--
+			if braces == 0 {
+				end = i + 1
+				break
+			}
 		}
-		items[info.ID] = info
 	}
-	return items, nil
+	if end == -1 {
+		return "", errors.New("player response incomplete")
+	}
+	return body[start:end], nil
 }
 
 func sanitizeIDs(ids []string) []string {
@@ -133,24 +187,26 @@ func parseRFC3339(value string) time.Time {
 	if value == "" {
 		return time.Time{}
 	}
-	t, err := time.Parse(time.RFC3339, value)
+	ts, err := time.Parse(time.RFC3339, value)
 	if err != nil {
 		return time.Time{}
 	}
-	return t
+	return ts
 }
 
-type apiResponse struct {
-	Items []struct {
-		ID      string `json:"id"`
-		Snippet struct {
-			ChannelID            string `json:"channelId"`
-			Title                string `json:"title"`
-			LiveBroadcastContent string `json:"liveBroadcastContent"`
-		} `json:"snippet"`
-		LiveStreamingDetails struct {
-			ActualStartTime    string `json:"actualStartTime"`
-			ScheduledStartTime string `json:"scheduledStartTime"`
-		} `json:"liveStreamingDetails"`
-	} `json:"items"`
+type playerResponse struct {
+	VideoDetails struct {
+		VideoID       string `json:"videoId"`
+		ChannelID     string `json:"channelId"`
+		Title         string `json:"title"`
+		IsLive        bool   `json:"isLive"`
+		IsLiveContent bool   `json:"isLiveContent"`
+	} `json:"videoDetails"`
+	Microformat struct {
+		PlayerMicroformatRenderer struct {
+			LiveBroadcastDetails struct {
+				StartTimestamp string `json:"startTimestamp"`
+			} `json:"liveBroadcastDetails"`
+		} `json:"playerMicroformatRenderer"`
+	} `json:"microformat"`
 }

@@ -14,7 +14,6 @@ type YouTubeConfig struct {
 	LeaseSeconds int    `json:"lease_seconds"`
 	Mode         string `json:"mode"`
 	Verify       string `json:"verify"`
-	DataAPIKey   string `json:"data_api_key"`
 }
 
 var YT YouTubeConfig // exported global config
@@ -26,8 +25,5 @@ func MustLoad(path string) {
 	}
 	if err := json.Unmarshal(data, &YT); err != nil {
 		log.Fatal(err)
-	}
-	if apiKey := os.Getenv("YOUTUBE_DATA_API_KEY"); apiKey != "" {
-		YT.DataAPIKey = apiKey
 	}
 }

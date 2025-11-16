@@ -2,50 +2,38 @@ package liveinfo
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 )
 
-func TestClientFetch(t *testing.T) {
+func TestClientFetchParsesLivePage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if want := "abc123,def456"; r.URL.Query().Get("id") != want {
-			t.Fatalf("expected ids %s, got %s", want, r.URL.Query().Get("id"))
+		if r.URL.Path != "/watch" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{
-			"items":[
-				{
-					"id":"abc123",
-					"snippet":{
-						"channelId":"UCdemo",
-						"title":"Live demo",
-						"liveBroadcastContent":"live"
-					},
-					"liveStreamingDetails":{
-						"actualStartTime":"2025-11-16T09:02:41Z"
-					}
-				}
-			]
-		}`)
+		if r.URL.Query().Get("v") == "" {
+			t.Fatalf("missing video id")
+		}
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`<!doctype html><html><head><script>var ytInitialPlayerResponse = {"videoDetails":{"videoId":"abc123","channelId":"UCdemo","title":"Live demo","isLiveContent":true},"microformat":{"playerMicroformatRenderer":{"liveBroadcastDetails":{"startTimestamp":"2025-11-16T09:02:41Z"}}}};</script></head><body></body></html>`))
 	}))
 	defer server.Close()
 
 	client := &Client{
-		APIKey:     "key",
 		HTTPClient: server.Client(),
-		BaseURL:    server.URL,
+		BaseURL:    server.URL + "/watch",
 	}
-	info, err := client.Fetch(context.Background(), []string{"abc123", "def456"})
+
+	info, err := client.Fetch(context.Background(), []string{"abc123"})
 	if err != nil {
-		t.Fatalf("fetch: %v", err)
+		t.Fatalf("fetch failed: %v", err)
 	}
-	if len(info) != 1 {
-		t.Fatalf("expected one entry, got %d", len(info))
+	entry, ok := info["abc123"]
+	if !ok {
+		t.Fatalf("expected entry for video")
 	}
-	entry := info["abc123"]
 	if !entry.IsLive() {
 		t.Fatalf("expected entry to be live")
 	}
@@ -53,25 +41,45 @@ func TestClientFetch(t *testing.T) {
 		t.Fatalf("unexpected channel id %q", entry.ChannelID)
 	}
 	if entry.ActualStartTime.IsZero() {
-		t.Fatalf("expected start time to be parsed")
+		t.Fatalf("expected start timestamp to be parsed")
 	}
 }
 
-func TestClientMissingKey(t *testing.T) {
-	client := &Client{}
-	if _, err := client.Fetch(context.Background(), []string{"abc"}); err == nil {
-		t.Fatalf("expected error for missing api key")
+func TestClientFetchSkipsFailures(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			http.Error(w, "bad", http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`<!doctype html><script>var ytInitialPlayerResponse = {"videoDetails":{"videoId":"def456","channelId":"UCdemo","title":"Demo","isLiveContent":false}};</script>`))
+	}))
+	defer server.Close()
+
+	client := &Client{
+		HTTPClient: server.Client(),
+		BaseURL:    server.URL + "/watch",
+	}
+
+	info, err := client.Fetch(context.Background(), []string{"abc123", "def456"})
+	if err != nil {
+		t.Fatalf("expected partial success, got error %v", err)
+	}
+	if len(info) != 1 {
+		t.Fatalf("expected one successful entry, got %d", len(info))
 	}
 }
 
 func TestVideoInfoIsLive(t *testing.T) {
-	if (VideoInfo{LiveBroadcastContent: "live"}).IsLive() == false {
-		t.Fatalf("expected live content to be detected")
+	if !(VideoInfo{LiveBroadcastContent: "live"}).IsLive() {
+		t.Fatalf("expected live content to be true")
 	}
-	if (VideoInfo{ActualStartTime: time.Now()}).IsLive() == false {
-		t.Fatalf("expected actual start to imply live")
+	if !(VideoInfo{ActualStartTime: time.Now()}).IsLive() {
+		t.Fatalf("expected actual start time to imply live")
 	}
 	if (VideoInfo{}).IsLive() {
-		t.Fatalf("expected zero value to be not live")
+		t.Fatalf("expected zero value to be offline")
 	}
 }

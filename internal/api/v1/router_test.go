@@ -1,13 +1,16 @@
 package v1
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"live-stream-alerts/internal/platforms/youtube/liveinfo"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 )
 
@@ -22,7 +25,7 @@ func (s *stubLogger) Printf(format string, args ...any) {
 func TestNewRouterServesConfigAndRoot(t *testing.T) {
 	logger := &stubLogger{}
 	runtime := RuntimeInfo{Name: "app", Addr: "127.0.0.1", Port: ":1234", ReadTimeout: "1s"}
-	router := NewRouter(Options{Logger: logger, RuntimeInfo: runtime})
+	router := NewRouter(Options{Logger: logger, RuntimeInfo: runtime, VideoLookup: noopVideoLookup{}})
 
 	t.Run("root", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -66,7 +69,7 @@ func TestRespondJSONSetsContentType(t *testing.T) {
 }
 
 func TestNewRouterWithoutLogger(t *testing.T) {
-	router := NewRouter(Options{})
+	router := NewRouter(Options{VideoLookup: noopVideoLookup{}})
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
@@ -86,6 +89,7 @@ func TestAlertsRouteHandlesVerification(t *testing.T) {
 	router := NewRouter(Options{
 		Logger:        logger,
 		StreamersPath: streamersPath,
+		VideoLookup:   noopVideoLookup{},
 	})
 
 	token := "verify-token"
@@ -109,17 +113,28 @@ func TestAlertsRouteHandlesVerification(t *testing.T) {
 	}
 }
 
-func TestAlertsRouteRejectsUnsupportedMethods(t *testing.T) {
-	router := NewRouter(Options{})
-	req := httptest.NewRequest(http.MethodPost, "/alerts", nil)
+func TestAlertsRoutePostRequiresValidFeed(t *testing.T) {
+	tmp := t.TempDir()
+	streamersPath := filepath.Join(tmp, "streamers.json")
+	if err := os.WriteFile(streamersPath, []byte(`{"$schema":"","streamers":[]}`), 0o644); err != nil {
+		t.Fatalf("write streamers file: %v", err)
+	}
+	router := NewRouter(Options{
+		StreamersPath: streamersPath,
+		VideoLookup:   noopVideoLookup{},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/alerts", strings.NewReader("not xml"))
 	rr := httptest.NewRecorder()
 
 	router.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected 405, got %d", rr.Code)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
 	}
-	if allow := rr.Header().Get("Allow"); allow != http.MethodGet {
-		t.Fatalf("expected Allow header to advertise GET, got %q", allow)
-	}
+}
+
+type noopVideoLookup struct{}
+
+func (noopVideoLookup) Fetch(ctx context.Context, videoIDs []string) (map[string]liveinfo.VideoInfo, error) {
+	return map[string]liveinfo.VideoInfo{}, nil
 }
