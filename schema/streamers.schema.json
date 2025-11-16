@@ -1,227 +1,430 @@
 {
-	"$schema": "https://json-schema.org/draft-07/schema",
-	"type": "object",
-	"properties": {
-		"streamer": {
-		"type": "object",
-		"description": "Streamers personal information",
-		"properties": {
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "title": "Sharpen Live streamer records",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Path or URL that points editors at this schema"
+    },
+    "streamers": {
+      "type": "array",
+      "description": "All persisted streamer records",
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    }
+  },
+  "$defs": {
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "streamer": {
+          "$ref": "#/$defs/streamer"
+        },
+        "platforms": {
+          "$ref": "#/$defs/platforms"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp when this record was created",
+          "readOnly": true
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp when this record was last updated",
+          "readOnly": true
+        }
+      },
+      "required": [
+        "streamer"
+      ]
+    },
+    "streamer": {
+      "type": "object",
+      "description": "Streamer's personal information",
+      "additionalProperties": false,
+      "properties": {
         "id": {
           "type": "string",
           "pattern": "^[A-Za-z0-9]+$",
-          "description": "Cleaned alias with all spaces, punctuation, and special characters removed (must be unique across all streamers)",
+          "minLength": 1,
+          "maxLength": 50,
+          "description": "Cleaned alias with spaces/punctuation removed (unique per streamer)",
           "readOnly": true
         },
-			"alias": {
-			"type": "string",
-			"description": "Streaming alias or nickname"
-			},
-			"firstName": {
-			"type": "string",
-			"description": "First name of streamer"
-			},
-			"lastName": {
-			"type": "string",
-			"description": "Last name of streamer"
-			},
-			"description": {
-			"type": "string",
-			"description": "Description of what the streamer does and what makes their streams unique"
-			},
-			"email": {
-			"type": "string",
-			"format": "email",
-			"description": "Streamer's email address"
-			},
-			"city": {
-			"type": "string",
-			"description": "Location of streamer"
-			},
-			"country": {
-			"type": "string",
-			"description": "Country the streamer is in"
-			},
-			"languages": {
-			"type": "array",
-			"minItems": 1,
-			"items": {
-				"type": "string",
-				"enum": [
-					"English",
-					"Afrikaans",
-					"Albanian",
-					"Amharic",
-					"Armenian",
-					"Azerbaijani",
-					"Basque",
-					"Belarusian",
-					"Bosnian",
-					"Bulgarian",
-					"Catalan",
-					"Cebuano",
-					"Croatian",
-					"Czech",
-					"Danish",
-					"Dutch",
-					"Estonian",
-					"Filipino",
-					"Finnish",
-					"Galician",
-					"Georgian",
-					"German",
-					"Greek",
-					"Gujarati",
-					"Haitian Creole",
-					"Hebrew",
-					"Hmong",
-					"Hungarian",
-					"Icelandic",
-					"Igbo",
-					"Italian",
-					"Japanese",
-					"Javanese",
-					"Kannada",
-					"Kazakh",
-					"Khmer",
-					"Kinyarwanda",
-					"Korean",
-					"Kurdish",
-					"Lao",
-					"Latvian",
-					"Lithuanian",
-					"Luxembourgish",
-					"Macedonian",
-					"Malay",
-					"Malayalam",
-					"Maltese",
-					"Marathi",
-					"Mongolian",
-					"Nepali",
-					"Norwegian",
-					"Pashto",
-					"Persian",
-					"Polish",
-					"Punjabi",
-					"Romanian",
-					"Serbian",
-					"Sinhala",
-					"Slovak",
-					"Slovenian",
-					"Somali",
-					"Swahili",
-					"Swedish",
-					"Tamil",
-					"Telugu",
-					"Thai",
-					"Turkish",
-					"Ukrainian",
-					"Urdu",
-					"Uzbek",
-					"Vietnamese",
-					"Welsh",
-					"Xhosa",
-					"Yoruba",
-					"Zulu"
-				]
-			},
-			"description": "Languages the streamer uses on their channel (must match one of the supported options)"
-			}
-		},
-		"required": [
-			"id",
-			"alias"
-		]
-		},
-		"platforms": {
-		"type": "object",
-		"properties": {
-			"youtube": {
-			"type": "object",
-			"properties": {
-				"handle": {
-				"type": "string",
-				"description": "YouTube channel handle"
-				},
-				"channelId": {
-				"type": "string",
-				"description": "Canonical UC channel ID"
-				},
-				"hubSecret": {
-				"type": "string",
-				"description": "Webhook secret used to verify YouTube notifications"
-				},
-				"hubLeaseRenewalDue": {
-				"type": "string",
-				"format": "date-time",
-				"description": "Date and time that the YouTube alert subscription is due for renewal"
-				},
-				"topic": {
-				"type": "string",
-				"description": "Full PubSubHubbub topic URL that was submitted when subscribing"
-				},
-				"callbackUrl": {
-				"type": "string",
-				"format": "uri",
-				"description": "Callback URL registered with YouTube for alert delivery"
-				},
-				"hubUrl": {
-				"type": "string",
-				"format": "uri",
-				"description": "PubSubHubbub hub endpoint used for the subscription"
-				},
-				"verifyMode": {
-				"type": "string",
-				"description": "Preferred verification mode (sync or async)"
-				},
-				"leaseSeconds": {
-				"type": "integer",
-				"minimum": 0,
-				"description": "Lease duration requested when subscribing (seconds)"
-				}
-			},
-			"required": [
-				"handle"
-			]
-			},
-			"facebook": {
-			"type": "object",
-			"properties": {
-				"pageId": {
-				"type": "string",
-				"description": "Facebook page identifier"
-				},
-				"accessToken": {
-				"type": "string",
-				"description": "Token used to call the Facebook Graph API"
-				}
-			}
-			},
-			"twitch": {
-			"type": "object",
-			"properties": {
-				"username": {
-				"type": "string",
-				"description": "Twitch broadcaster username"
-				},
-				"broadcasterId": {
-				"type": "string",
-				"description": "Twitch broadcaster ID"
-				}
-			}
-			}
-		}
-		},
-		"createdAt": {
-		"type": "string",
-		"format": "date-time",
-		"description": "ISO-8601 timestamp when this record was created",
-		"readOnly": true
-		},
-		"updatedAt": {
-		"type": "string",
-		"format": "date-time",
-		"description": "ISO-8601 timestamp when this record was last updated",
-		"readOnly": true
-		}
-	}
+        "alias": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 50,
+          "description": "Streaming alias or nickname"
+        },
+        "firstName": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 50,
+          "description": "First name of streamer (optional)"
+        },
+        "lastName": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 50,
+          "description": "Last name of streamer (optional)"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "What the streamer does and what makes their streams unique"
+        },
+        "email": {
+          "description": "Streamer's email address (optional, must be valid when provided)",
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "email",
+              "minLength": 3,
+              "maxLength": 254
+            },
+            {
+              "type": "string",
+              "maxLength": 0
+            }
+          ]
+        },
+        "city": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "City where the streamer is located"
+        },
+        "country": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Country the streamer is in"
+        },
+        "languages": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Languages the streamer uses (must be in the supported list)",
+          "items": {
+            "type": "string",
+            "enum": [
+              "English",
+              "Afrikaans",
+              "Albanian",
+              "Amharic",
+              "Armenian",
+              "Azerbaijani",
+              "Basque",
+              "Belarusian",
+              "Bosnian",
+              "Bulgarian",
+              "Catalan",
+              "Cebuano",
+              "Croatian",
+              "Czech",
+              "Danish",
+              "Dutch",
+              "Estonian",
+              "Filipino",
+              "Finnish",
+              "French",
+              "Galician",
+              "Georgian",
+              "German",
+              "Greek",
+              "Gujarati",
+              "Haitian Creole",
+              "Hebrew",
+              "Hindi",
+              "Hmong",
+              "Hungarian",
+              "Icelandic",
+              "Igbo",
+              "Italian",
+              "Japanese",
+              "Javanese",
+              "Kannada",
+              "Kazakh",
+              "Khmer",
+              "Kinyarwanda",
+              "Korean",
+              "Kurdish",
+              "Lao",
+              "Latvian",
+              "Lithuanian",
+              "Luxembourgish",
+              "Macedonian",
+              "Malay",
+              "Malayalam",
+              "Maltese",
+              "Mandarin",
+              "Marathi",
+              "Mongolian",
+              "Nepali",
+              "Norwegian",
+              "Pashto",
+              "Persian",
+              "Polish",
+              "Portuguese",
+              "Punjabi",
+              "Romanian",
+              "Serbian",
+              "Sinhala",
+              "Slovak",
+              "Slovenian",
+              "Somali",
+              "Spanish",
+              "Swahili",
+              "Swedish",
+              "Tamil",
+              "Telugu",
+              "Thai",
+              "Turkish",
+              "Ukrainian",
+              "Urdu",
+              "Uzbek",
+              "Vietnamese",
+              "Welsh",
+              "Xhosa",
+              "Yoruba",
+              "Zulu"
+            ]
+          }
+        }
+      },
+      "required": [
+        "id",
+        "alias"
+      ]
+    },
+    "platforms": {
+      "type": "object",
+      "description": "Configured platform metadata",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "youtube": {
+          "$ref": "#/$defs/platformYouTube"
+        },
+        "facebook": {
+          "$ref": "#/$defs/platformFacebook"
+        },
+        "twitch": {
+          "$ref": "#/$defs/platformTwitch"
+        }
+      }
+    },
+    "status": {
+      "type": "object",
+      "description": "Derived streaming status",
+      "readOnly": true,
+      "additionalProperties": false,
+      "properties": {
+        "live": {
+          "type": "boolean",
+          "description": "True if the streamer is live on any platform",
+          "readOnly": true
+        },
+        "platforms": {
+          "type": "array",
+          "description": "Platforms the streamer is currently live on",
+          "items": {
+            "type": "string",
+            "enum": [
+              "youtube",
+              "twitch",
+              "facebook"
+            ]
+          },
+          "uniqueItems": true,
+          "readOnly": true
+        },
+        "youtube": {
+          "type": "object",
+          "description": "Additional YouTube live information",
+          "additionalProperties": false,
+          "properties": {
+            "live": {
+              "type": "boolean",
+              "readOnly": true
+            },
+            "videoId": {
+              "type": "string",
+              "description": "Live video ID if streaming",
+              "readOnly": true
+            },
+            "startedAt": {
+              "type": "string",
+              "format": "date-time",
+              "readOnly": true
+            }
+          }
+        },
+        "twitch": {
+          "type": "object",
+          "description": "Additional Twitch live information",
+          "additionalProperties": false,
+          "properties": {
+            "live": {
+              "type": "boolean",
+              "readOnly": true
+            },
+            "streamId": {
+              "type": "string",
+              "description": "Twitch stream ID if live",
+              "readOnly": true
+            },
+            "startedAt": {
+              "type": "string",
+              "format": "date-time",
+              "readOnly": true
+            }
+          }
+        },
+        "facebook": {
+          "type": "object",
+          "description": "Additional Facebook Live information",
+          "additionalProperties": false,
+          "properties": {
+            "live": {
+              "type": "boolean",
+              "readOnly": true
+            },
+            "videoId": {
+              "type": "string",
+              "description": "Facebook Live video ID if streaming",
+              "readOnly": true
+            },
+            "startedAt": {
+              "type": "string",
+              "format": "date-time",
+              "readOnly": true
+            }
+          }
+        }
+      },
+      "required": [
+        "live"
+      ]
+    },
+    "platformYouTube": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "handle": {
+          "type": "string",
+          "pattern": "^@?[A-Za-z0-9._-]{3,30}$",
+          "description": "YouTube channel handle"
+        },
+        "channelId": {
+          "type": "string",
+          "pattern": "^UC[0-9A-Za-z_-]{22}$",
+          "description": "Canonical UC channel ID"
+        },
+        "hubSecret": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128,
+          "description": "Webhook secret used to verify YouTube notifications"
+        },
+        "hubLeaseRenewalDue": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Next time the WebSub lease must be renewed"
+        },
+        "topic": {
+          "type": "string",
+          "pattern": "^https://www\\.youtube\\.com/xml/feeds/videos\\.xml\\?channel_id=[A-Za-z0-9_-]+$",
+          "description": "Full PubSubHubbub topic URL submitted when subscribing"
+        },
+        "callbackUrl": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "description": "Callback URL registered with YouTube for alert delivery"
+        },
+        "hubUrl": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "description": "PubSubHubbub hub endpoint used for the subscription"
+        },
+        "verifyMode": {
+          "type": "string",
+          "enum": [
+            "sync",
+            "async"
+          ],
+          "description": "Preferred verification mode"
+        },
+        "leaseSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 864000,
+          "description": "Lease duration requested when subscribing (seconds)"
+        }
+      },
+      "required": [
+        "handle",
+        "channelId",
+        "hubSecret",
+        "topic",
+        "callbackUrl",
+        "hubUrl"
+      ]
+    },
+    "platformFacebook": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pageId": {
+          "type": "string",
+          "pattern": "^[0-9]{5,}$",
+          "description": "Facebook page identifier"
+        },
+        "accessToken": {
+          "type": "string",
+          "minLength": 20,
+          "description": "Token used to call the Facebook Graph API"
+        }
+      },
+      "required": [
+        "pageId",
+        "accessToken"
+      ]
+    },
+    "platformTwitch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "username": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{4,25}$",
+          "description": "Twitch broadcaster username"
+        },
+        "broadcasterId": {
+          "type": "string",
+          "pattern": "^[0-9]+$",
+          "description": "Twitch broadcaster ID"
+        }
+      },
+      "required": [
+        "username",
+        "broadcasterId"
+      ]
+    }
+  },
+  "required": [
+    "streamers"
+  ]
 }
