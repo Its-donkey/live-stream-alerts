@@ -1,3 +1,4 @@
+// file name — /client.go
 package subscriptions
 
 import (
@@ -12,45 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"live-stream-alerts/config"
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 )
-
-var (
-	DefaultHubURL      = "https://pubsubhubbub.appspot.com/subscribe"
-	DefaultCallbackURL = "https://sharpen.live/alerts"
-	DefaultLease       = 864000 // 10 days in seconds (maximum for YouTube)
-	DefaultMode        = "subscribe"
-	DefaultVerify      = "async"
-)
-
-// Defaults represents the configurable hub parameters.
-type Defaults struct {
-	HubURL       string
-	CallbackURL  string
-	LeaseSeconds int
-	Mode         string
-	Verify       string
-}
-
-// ConfigureDefaults overrides the package defaults with the supplied values.
-func ConfigureDefaults(cfg Defaults) {
-	if strings.TrimSpace(cfg.HubURL) != "" {
-		DefaultHubURL = cfg.HubURL
-	}
-	if strings.TrimSpace(cfg.CallbackURL) != "" {
-		DefaultCallbackURL = cfg.CallbackURL
-	}
-	if cfg.LeaseSeconds > 0 {
-		DefaultLease = cfg.LeaseSeconds
-	}
-	if strings.TrimSpace(cfg.Mode) != "" {
-		DefaultMode = cfg.Mode
-	}
-	if strings.TrimSpace(cfg.Verify) != "" {
-		DefaultVerify = cfg.Verify
-	}
-}
 
 // YouTubeRequest models the fields required by YouTube's WebSub subscription flow.
 type YouTubeRequest struct {
@@ -65,74 +31,69 @@ type YouTubeRequest struct {
 	ChannelID    string
 }
 
-// NormaliseSubscribeRequest applies the enforced defaults required by the system.
-func NormaliseSubscribeRequest(req *YouTubeRequest) {
-	mode := strings.TrimSpace(DefaultMode)
-	if mode == "" {
-		mode = "subscribe"
-	}
-	req.Mode = mode
-	if strings.TrimSpace(req.HubURL) == "" {
-		req.HubURL = DefaultHubURL
-	}
-	if strings.TrimSpace(req.Callback) == "" {
-		req.Callback = DefaultCallbackURL
-	}
-	if strings.TrimSpace(req.Verify) == "" {
-		req.Verify = DefaultVerify
-	}
-	if req.LeaseSeconds <= 0 {
-		req.LeaseSeconds = DefaultLease
-	}
-}
-
-// NormaliseUnsubscribeRequest applies the enforced defaults for unsubscribe flows.
-func NormaliseUnsubscribeRequest(req *YouTubeRequest) {
-	req.Mode = "unsubscribe"
-	if strings.TrimSpace(req.HubURL) == "" {
-		req.HubURL = DefaultHubURL
-	}
-	if strings.TrimSpace(req.Callback) == "" {
-		req.Callback = DefaultCallbackURL
-	}
-	if strings.TrimSpace(req.Verify) == "" {
-		req.Verify = DefaultVerify
-	}
-	if req.LeaseSeconds <= 0 {
-		req.LeaseSeconds = DefaultLease
-	}
-}
-
-// SubscribeYouTube executes a WebSub subscription call against the provided hub URL.
-// Fields expected:
-//   - Topic, Callback, Mode, Verify, VerifyToken, Secret, LeaseSeconds
+// SubscribeYouTube executes a WebSub subscription call against the provided or configured hub URL.
 //
-// For WebSub subscribe, Mode should be "subscribe"; Verify is "sync" or "async".
-func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req YouTubeRequest) (*http.Response, []byte, YouTubeRequest, error) {
+// Precedence:
+//   - HubURL / Callback / Verify from req (if non-empty)
+//   - Otherwise falls back to config.YT.HubURL / CallbackURL / Verify.
+//
+// For WebSub subscribe, Mode should be "subscribe"; for unsubscribe, "unsubscribe".
+// Verify is "sync" or "async".
+func SubscribeYouTube(
+	ctx context.Context,
+	hc *http.Client,
+	logger logging.Logger,
+	req YouTubeRequest,
+) (*http.Response, []byte, YouTubeRequest, error) {
+	// Ensure we have a logger.
+	if logger == nil {
+		logger = logging.New()
+	}
+
+	// Centralised default HTTP client.
 	if hc == nil {
 		hc = &http.Client{Timeout: 10 * time.Second}
 	}
-	if strings.TrimSpace(hubURL) == "" {
-		return nil, nil, req, errors.New("hubURL is required")
+
+	// Resolve hub URL: request overrides config.
+	hubURL := strings.TrimSpace(req.HubURL)
+	if hubURL == "" {
+		hubURL = strings.TrimSpace(config.YT.HubURL)
 	}
+	if hubURL == "" {
+		return nil, nil, req, errors.New("hubURL is required but is not configured correctly in config.json")
+	}
+
 	if strings.TrimSpace(req.Topic) == "" {
 		return nil, nil, req, errors.New("topic is required")
 	}
+
+	// Resolve callback: request overrides config.
 	callback := strings.TrimSpace(req.Callback)
 	if callback == "" {
-		callback = DefaultCallbackURL
+		callback = strings.TrimSpace(config.YT.CallbackURL)
 	}
+	if callback == "" {
+		return nil, nil, req, errors.New("callbackURL is required but is not configured correctly in config.json")
+	}
+
 	mode := strings.TrimSpace(req.Mode)
 	if mode == "" {
-		mode = DefaultMode
+		return nil, nil, req, errors.New("subscribe or unsubscribe must be set as mode")
 	}
+
+	// Resolve verify: request overrides config.
 	verify := strings.TrimSpace(req.Verify)
 	if verify == "" {
-		verify = DefaultVerify
+		verify = strings.TrimSpace(config.YT.Verify)
 	}
-	verifyToken := strings.TrimSpace(req.VerifyToken)
+	if verify == "" {
+		return nil, nil, req, errors.New("sync or async(default) must be set as verify mode")
+	}
+
+	verifyToken := strings.TrimSpace(websub.GenerateVerifyToken())
 	if verifyToken == "" {
-		verifyToken = websub.GenerateVerifyToken()
+		return nil, nil, req, errors.New("verify token generation failed")
 	}
 	req.VerifyToken = verifyToken
 
@@ -157,7 +118,7 @@ func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req Y
 		}
 	}()
 
-	// Build application/x-www-form-urlencoded body
+	// Build application/x-www-form-urlencoded body.
 	form := url.Values{}
 	form.Set("hub.mode", mode)
 	form.Set("hub.topic", req.Topic)
@@ -168,23 +129,23 @@ func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req Y
 		form.Set("hub.lease_seconds", strconv.Itoa(req.LeaseSeconds))
 	}
 
-	// Only include secret if callback is HTTPS (best practice)
+	// Only include secret if callback is HTTPS (best practice).
+	// Uses the resolved callback, so it works whether it came from req or config.
 	if req.Secret != "" {
-		if u, err := url.Parse(req.Callback); err == nil && strings.EqualFold(u.Scheme, "https") {
+		if u, err := url.Parse(callback); err == nil && strings.EqualFold(u.Scheme, "https") {
 			form.Set("hub.secret", req.Secret)
 		}
 	}
 
-	hubURL = strings.TrimSpace(hubURL)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, hubURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, nil, req, fmt.Errorf("build request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	httpReq.Header.Set("User-Agent", "sharpen-live-websub-client/1.0")
+	httpReq.Header.Set("User-Agent", "live-stream-alerts-client/1.0")
 
 	if dump, err := httputil.DumpRequestOut(httpReq, true); err == nil {
-		logging.New().Printf("Outbound WebSub request:\n%s", dump)
+		logger.Printf("Outbound WebSub request:\n%s", dump)
 	}
 
 	resp, err := hc.Do(httpReq)
@@ -200,6 +161,7 @@ func SubscribeYouTube(ctx context.Context, hc *http.Client, hubURL string, req Y
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return resp, body, req, fmt.Errorf("hub returned non-2xx: %s", resp.Status)
 	}
+
 	subscriptionAccepted = true
 	return resp, body, req, nil
 }

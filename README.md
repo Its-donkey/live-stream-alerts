@@ -113,10 +113,12 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
   }
   ```
 - **Notes:** The path no longer requires the ID segment; only the JSON body must include `streamer.id` (case-insensitive match).
+- **YouTube cleanup:** If the streamer has YouTube platform metadata, the server issues a PubSubHubbub `unsubscribe` before removing the record so hub callbacks stop hitting `/alerts`.
 - **Responses:**
   - `200 OK` with `{ "status": "deleted", "id": "..." }` when the record is deleted.
   - `404 Not Found` if the ID does not match an existing streamer.
   - `400 Bad Request` when the ID segment is missing or the JSON body is invalid/mismatched.
+  - `502 Bad Gateway` if the hub unsubscribe fails; the record remains untouched.
   - `500 Internal Server Error` for unexpected persistence failures (also logged server-side).
 - **Handler coverage:** The same `/api/streamers` handler powers GET, POST, PATCH, and DELETE, so clients can reuse the base path and expect the `Allow: GET, POST, PATCH, DELETE` header on unsupported verbs.
 

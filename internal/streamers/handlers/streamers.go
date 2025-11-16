@@ -45,7 +45,7 @@ func StreamersHandler(opts StreamOptions) http.Handler {
 			updateStreamer(w, r, path, opts.Logger)
 			return
 		case http.MethodDelete:
-			deleteStreamer(w, r, path, opts.Logger)
+			deleteStreamer(w, r, path, opts.Logger, youtubeClient, youtubeHubURL)
 			return
 		default:
 			w.Header().Set("Allow", fmt.Sprintf("%s, %s, %s, %s", http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodDelete))

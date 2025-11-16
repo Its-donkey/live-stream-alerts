@@ -1,3 +1,4 @@
+// file name: internal/platforms/youtube/handlers/websub_alerts.go
 package handlers
 
 import (
@@ -9,7 +10,7 @@ import (
 	"time"
 
 	"live-stream-alerts/internal/logging"
-	youtubestore "live-stream-alerts/internal/platforms/youtube/store"
+	youtubesub "live-stream-alerts/internal/platforms/youtube/subscriptions"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 )
 
@@ -118,7 +119,7 @@ func HandleSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, opts
 		channelID = websub.ExtractChannelID(topic)
 	}
 	if channelID != "" {
-		if err := youtubestore.RecordLease(opts.StreamersPath, channelID, verifiedAt); err != nil && logger != nil {
+		if err := youtubesub.RecordLease(opts.StreamersPath, channelID, verifiedAt); err != nil && logger != nil {
 			logger.Printf("failed to record hub lease for %s: %v", channelID, err)
 		}
 	}

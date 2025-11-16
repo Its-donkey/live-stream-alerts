@@ -6,107 +6,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"live-stream-alerts/config"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 )
 
-func TestNormaliseSubscribeRequest(t *testing.T) {
-	req := YouTubeRequest{}
-	NormaliseSubscribeRequest(&req)
-	if req.Callback != DefaultCallbackURL || req.Mode != DefaultMode || req.LeaseSeconds != DefaultLease {
-		t.Fatalf("unexpected defaults applied: %#v", req)
-	}
-}
-
-func TestNormaliseSubscribeRequestDoesNotOverrideProvidedValues(t *testing.T) {
-	req := YouTubeRequest{
-		HubURL:       "https://custom-hub",
-		Callback:     "https://custom-callback",
-		Verify:       "sync",
-		LeaseSeconds: 10,
-	}
-	NormaliseSubscribeRequest(&req)
-	if req.HubURL != "https://custom-hub" {
-		t.Fatalf("hub url was overridden: %s", req.HubURL)
-	}
-	if req.Callback != "https://custom-callback" {
-		t.Fatalf("callback was overridden: %s", req.Callback)
-	}
-	if req.Verify != "sync" {
-		t.Fatalf("verify was overridden: %s", req.Verify)
-	}
-	if req.LeaseSeconds != 10 {
-		t.Fatalf("lease was overridden: %d", req.LeaseSeconds)
-	}
-	if req.Mode != DefaultMode {
-		t.Fatalf("mode should still be forced to %s", DefaultMode)
-	}
-}
-
-func TestNormaliseUnsubscribeRequestDoesNotOverrideProvidedValues(t *testing.T) {
-	req := YouTubeRequest{
-		HubURL:       "https://custom-hub",
-		Callback:     "https://custom-callback",
-		Verify:       "sync",
-		LeaseSeconds: 10,
-	}
-	NormaliseUnsubscribeRequest(&req)
-	if req.HubURL != "https://custom-hub" {
-		t.Fatalf("hub url was overridden: %s", req.HubURL)
-	}
-	if req.Callback != "https://custom-callback" {
-		t.Fatalf("callback was overridden: %s", req.Callback)
-	}
-	if req.Verify != "sync" {
-		t.Fatalf("verify was overridden: %s", req.Verify)
-	}
-	if req.LeaseSeconds != 10 {
-		t.Fatalf("lease was overridden: %d", req.LeaseSeconds)
-	}
-	if req.Mode != "unsubscribe" {
-		t.Fatalf("mode should be unsubscribe, got %s", req.Mode)
-	}
-}
-
-func TestConfigureDefaultsOverridesValues(t *testing.T) {
-	original := Defaults{
-		HubURL:       DefaultHubURL,
-		CallbackURL:  DefaultCallbackURL,
-		LeaseSeconds: DefaultLease,
-		Mode:         DefaultMode,
-		Verify:       DefaultVerify,
-	}
-	t.Cleanup(func() {
-		ConfigureDefaults(original)
-	})
-
-	ConfigureDefaults(Defaults{
-		HubURL:       "https://override-hub",
-		CallbackURL:  "https://override-callback",
-		LeaseSeconds: 42,
-		Mode:         "sync-mode",
-		Verify:       "sync",
-	})
-
-	if DefaultHubURL != "https://override-hub" {
-		t.Fatalf("expected hub override, got %s", DefaultHubURL)
-	}
-	if DefaultCallbackURL != "https://override-callback" {
-		t.Fatalf("expected callback override, got %s", DefaultCallbackURL)
-	}
-	if DefaultLease != 42 {
-		t.Fatalf("expected lease override, got %d", DefaultLease)
-	}
-	if DefaultMode != "sync-mode" {
-		t.Fatalf("expected mode override, got %s", DefaultMode)
-	}
-	if DefaultVerify != "sync" {
-		t.Fatalf("expected verify override, got %s", DefaultVerify)
-	}
-
-	ConfigureDefaults(Defaults{})
-	if DefaultHubURL != "https://override-hub" {
-		t.Fatalf("blank override should be ignored")
-	}
+func withConfig(t *testing.T, cfg config.YouTubeConfig) {
+	t.Helper()
+	original := config.YT
+	config.YT = cfg
+	t.Cleanup(func() { config.YT = original })
 }
 
 func TestSubscribeYouTubeSuccess(t *testing.T) {
@@ -114,21 +22,37 @@ func TestSubscribeYouTubeSuccess(t *testing.T) {
 		if err := r.ParseForm(); err != nil {
 			t.Fatalf("parse form: %v", err)
 		}
-		if r.Form.Get("hub.mode") != "subscribe" {
-			t.Fatalf("expected subscribe mode")
+		if got := r.Form.Get("hub.mode"); got != "subscribe" {
+			t.Fatalf("expected subscribe mode, got %s", got)
+		}
+		if got := r.Form.Get("hub.callback"); got != "https://callback.example.com/alerts" {
+			t.Fatalf("callback mismatch: %s", got)
 		}
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte("ok"))
 	}))
 	defer hub.Close()
 
-	req := YouTubeRequest{Topic: "https://example", Callback: hub.URL, Verify: "async", VerifyToken: "token", ChannelID: "UC1"}
-	resp, body, finalReq, err := SubscribeYouTube(context.Background(), hub.Client(), hub.URL, req)
+	withConfig(t, config.YouTubeConfig{
+		HubURL:       hub.URL,
+		CallbackURL:  "https://callback.example.com/alerts",
+		LeaseSeconds: 120,
+		Verify:       "async",
+	})
+
+	req := YouTubeRequest{
+		Topic:        "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC123",
+		Mode:         "subscribe",
+		Verify:       "async",
+		LeaseSeconds: 120,
+	}
+
+	resp, body, finalReq, err := SubscribeYouTube(context.Background(), hub.Client(), nil, req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("expected 202")
+		t.Fatalf("expected 202, got %d", resp.StatusCode)
 	}
 	if string(body) != "ok" {
 		t.Fatalf("unexpected body %q", string(body))
@@ -139,12 +63,14 @@ func TestSubscribeYouTubeSuccess(t *testing.T) {
 	websub.CancelExpectation(finalReq.VerifyToken)
 }
 
-func TestSubscribeYouTubeValidatesInputs(t *testing.T) {
-	if _, _, _, err := SubscribeYouTube(context.Background(), nil, "", YouTubeRequest{}); err == nil {
-		t.Fatalf("expected error for missing hub url")
-	}
-	if _, _, _, err := SubscribeYouTube(context.Background(), nil, "http://hub", YouTubeRequest{}); err == nil {
-		t.Fatalf("expected error for missing topic")
+func TestSubscribeYouTubeValidatesConfig(t *testing.T) {
+	withConfig(t, config.YouTubeConfig{}) // everything empty
+	_, _, _, err := SubscribeYouTube(context.Background(), nil, nil, YouTubeRequest{
+		Topic: "https://example",
+		Mode:  "subscribe",
+	})
+	if err == nil {
+		t.Fatalf("expected error when hub url is missing")
 	}
 }
 
@@ -155,15 +81,27 @@ func TestSubscribeYouTubePropagatesHubErrors(t *testing.T) {
 	}))
 	defer hub.Close()
 
-	req := YouTubeRequest{Topic: "https://example", Callback: hub.URL, Verify: "async", VerifyToken: "token"}
-	resp, body, _, err := SubscribeYouTube(context.Background(), hub.Client(), hub.URL, req)
+	withConfig(t, config.YouTubeConfig{
+		HubURL:       hub.URL,
+		CallbackURL:  "https://callback.example.com/alerts",
+		LeaseSeconds: 60,
+		Verify:       "async",
+	})
+
+	req := YouTubeRequest{
+		Topic:        "https://example",
+		Mode:         "subscribe",
+		LeaseSeconds: 60,
+	}
+
+	resp, body, _, err := SubscribeYouTube(context.Background(), hub.Client(), nil, req)
 	if err == nil {
 		t.Fatalf("expected error for non-2xx response")
 	}
 	if resp == nil || resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected response returned")
+		t.Fatalf("expected response with 400")
 	}
 	if string(body) != "bad" {
-		t.Fatalf("expected body from hub")
+		t.Fatalf("expected hub body propagated")
 	}
 }

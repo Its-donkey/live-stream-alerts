@@ -6,20 +6,35 @@ import (
 	"net/http"
 	"time"
 
+	"live-stream-alerts/config"
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/subscriptions"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 )
 
-// SubscribeHandlerOptions configures the subscribe handler.
-type SubscribeHandlerOptions struct {
-	HubURL string
+// SubscriptionHandlerOptions configures handlers that talk to the YouTube hub.
+type SubscriptionHandlerOptions struct {
 	Client *http.Client
 	Logger logging.Logger
 }
 
+// SubscribeHandlerOptions configures the subscribe handler.
+type SubscribeHandlerOptions = SubscriptionHandlerOptions
+
+// UnsubscribeHandlerOptions configures the unsubscribe handler.
+type UnsubscribeHandlerOptions = SubscriptionHandlerOptions
+
 // NewSubscribeHandler returns an http.Handler that accepts POST requests and forwards them to YouTube's hub.
 func NewSubscribeHandler(opts SubscribeHandlerOptions) http.Handler {
+	return newSubscriptionHandler("subscribe", "subscribe request", opts)
+}
+
+// NewUnsubscribeHandler returns an http.Handler that issues unsubscribe requests to YouTube's hub.
+func NewUnsubscribeHandler(opts UnsubscribeHandlerOptions) http.Handler {
+	return newSubscriptionHandler("unsubscribe", "unsubscribe request", opts)
+}
+
+func newSubscriptionHandler(mode, logLabel string, opts SubscriptionHandlerOptions) http.Handler {
 	client := opts.Client
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
@@ -33,21 +48,20 @@ func NewSubscribeHandler(opts SubscribeHandlerOptions) http.Handler {
 		}
 
 		defer r.Body.Close()
-		var subscribeReq subscriptions.YouTubeRequest
-		if err := json.NewDecoder(r.Body).Decode(&subscribeReq); err != nil {
+		var req subscriptions.YouTubeRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid JSON body", http.StatusBadRequest)
 			return
 		}
 
-		subscriptions.NormaliseSubscribeRequest(&subscribeReq)
-		requestHubURL := subscriptions.DefaultHubURL
-		if opts.HubURL != "" {
-			requestHubURL = opts.HubURL
+		req.Mode = mode
+		if req.LeaseSeconds <= 0 {
+			req.LeaseSeconds = config.YT.LeaseSeconds
 		}
 
-		resp, body, finalReq, err := subscriptions.SubscribeYouTube(r.Context(), client, requestHubURL, subscribeReq)
+		resp, body, finalReq, err := subscriptions.SubscribeYouTube(r.Context(), client, opts.Logger, req)
 		if err != nil && opts.Logger != nil {
-			opts.Logger.Printf("subscribe request hub response: %v", err)
+			opts.Logger.Printf("%s hub response: %v", logLabel, err)
 		}
 		if resp == nil {
 			http.Error(w, "hub request failed", http.StatusBadGateway)
@@ -68,6 +82,6 @@ func NewSubscribeHandler(opts SubscribeHandlerOptions) http.Handler {
 			_, _ = io.WriteString(w, resp.Status)
 		}
 
-		websub.RecordSubscriptionResult(finalReq.VerifyToken, "", subscribeReq.Topic, resp.Status, string(body))
+		websub.RecordSubscriptionResult(finalReq.VerifyToken, "", req.Topic, resp.Status, string(body))
 	})
 }

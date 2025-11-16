@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	
 
 	"live-stream-alerts/config"
 	apiv1 "live-stream-alerts/internal/api/v1"
@@ -15,6 +16,7 @@ import (
 )
 
 func main() {
+	config.MustLoad("config.json")
 	logger := logging.New()
 	const (
 		addr = "127.0.0.1"
@@ -22,8 +24,6 @@ func main() {
 	)
 	readWindow := 10 * time.Second
 
-	// Configure YouTube WebSub defaults (flags + env).
-	config.ConfigureYouTube()
 
 	// -----------------------------------------------------
 	router := apiv1.NewRouter(apiv1.Options{
@@ -70,4 +70,3 @@ func main() {
 		}
 	}
 }
-

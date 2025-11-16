@@ -259,6 +259,46 @@
 					"response": []
 				},
 				{
+					"name": "GET /alert (Hub verification alias)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{serverBase}}/alert?hub.mode=subscribe&hub.topic=https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCexample&hub.challenge=demo-challenge&hub.verify_token=demo-token&hub.lease_seconds=864000",
+							"host": [
+								"{{serverBase}}"
+							],
+							"path": [
+								"alert"
+							],
+							"query": [
+								{
+									"key": "hub.mode",
+									"value": "subscribe"
+								},
+								{
+									"key": "hub.topic",
+									"value": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCexample"
+								},
+								{
+									"key": "hub.challenge",
+									"value": "demo-challenge"
+								},
+								{
+									"key": "hub.verify_token",
+									"value": "demo-token"
+								},
+								{
+									"key": "hub.lease_seconds",
+									"value": "864000"
+								}
+							]
+						},
+						"description": "Identical to `/alerts` but verifies the legacy singular callback path that older reverse proxies might still hit."
+					},
+					"response": []
+				},
+				{
 					"name": "POST /api/youtube/channel",
 					"request": {
 						"method": "POST",
