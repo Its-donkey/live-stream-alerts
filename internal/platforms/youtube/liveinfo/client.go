@@ -11,12 +11,15 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"live-stream-alerts/internal/logging"
 )
 
 // Client fetches live metadata by scraping YouTube watch pages (no API key required).
 type Client struct {
 	HTTPClient *http.Client
 	BaseURL    string
+	Logger     logging.Logger
 }
 
 // VideoInfo represents the parsed metadata for a video.
@@ -42,6 +45,7 @@ func (c *Client) Fetch(ctx context.Context, videoIDs []string) (map[string]Video
 	if len(ids) == 0 {
 		return map[string]VideoInfo{}, nil
 	}
+	c.logf("Fetching live metadata for %d video(s): %s", len(ids), strings.Join(ids, ", "))
 
 	httpClient := c.HTTPClient
 	if httpClient == nil {
@@ -57,11 +61,13 @@ func (c *Client) Fetch(ctx context.Context, videoIDs []string) (map[string]Video
 	for _, id := range ids {
 		info, err := c.fetchSingle(ctx, httpClient, baseURL, id)
 		if err != nil {
+			c.logf("Fetch for video %s failed: %v", id, err)
 			if firstErr == nil {
 				firstErr = fmt.Errorf("fetch %s: %w", id, err)
 			}
 			continue
 		}
+		c.logf("Fetched metadata for %s: channel=%s title=%q live=%v start=%s", id, info.ChannelID, info.Title, info.IsLive(), info.ActualStartTime)
 		results[id] = info
 	}
 	if len(results) == 0 && firstErr != nil {
@@ -86,6 +92,7 @@ func (c *Client) fetchSingle(ctx context.Context, client *http.Client, baseURL, 
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; LiveStreamAlerts/1.0)")
 	req.Header.Set("Accept-Language", "en")
 
+	c.logf("Requesting watch page for %s: %s", id, watchURL.String())
 	resp, err := client.Do(req)
 	if err != nil {
 		return VideoInfo{}, err
@@ -102,6 +109,7 @@ func (c *Client) fetchSingle(ctx context.Context, client *http.Client, baseURL, 
 
 	playerJSON, err := extractPlayerResponse(string(body))
 	if err != nil {
+		c.logf("Failed to locate player response for %s; first 200 bytes: %q", id, previewBody(body, 200))
 		return VideoInfo{}, err
 	}
 
@@ -109,6 +117,7 @@ func (c *Client) fetchSingle(ctx context.Context, client *http.Client, baseURL, 
 
 	var payload playerResponse
 	if err := json.Unmarshal([]byte(playerJSON), &payload); err != nil {
+		c.logf("Player response decode failed for %s. Payload prefix: %q", id, previewString(playerJSON, 200))
 		return VideoInfo{}, fmt.Errorf("decode player response: %w", err)
 	}
 
@@ -122,6 +131,13 @@ func (c *Client) fetchSingle(ctx context.Context, client *http.Client, baseURL, 
 	}
 	info.ActualStartTime = parseRFC3339(payload.Microformat.PlayerMicroformatRenderer.LiveBroadcastDetails.StartTimestamp)
 	return info, nil
+}
+
+func (c *Client) logf(format string, args ...any) {
+	if c == nil || c.Logger == nil {
+		return
+	}
+	c.Logger.Printf(format, args...)
 }
 
 var playerResponsePattern = regexp.MustCompile(`(?s)ytInitialPlayerResponse\s*=\s*(\{.+?\});`)
@@ -186,4 +202,21 @@ type playerResponse struct {
 			} `json:"liveBroadcastDetails"`
 		} `json:"playerMicroformatRenderer"`
 	} `json:"microformat"`
+}
+
+func previewBody(body []byte, limit int) string {
+	if len(body) == 0 {
+		return ""
+	}
+	if len(body) > limit {
+		return string(body[:limit]) + "…"
+	}
+	return string(body)
+}
+
+func previewString(raw string, limit int) string {
+	if len(raw) > limit {
+		return raw[:limit] + "…"
+	}
+	return raw
 }

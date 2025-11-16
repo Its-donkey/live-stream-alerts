@@ -50,7 +50,7 @@ func NewRouter(opts Options) http.Handler {
 
 	videoLookup := opts.VideoLookup
 	if videoLookup == nil {
-		videoLookup = &liveinfo.Client{}
+		videoLookup = &liveinfo.Client{Logger: logger}
 	}
 
 	alertsHandler := handleAlerts(handleAlertsOptions{

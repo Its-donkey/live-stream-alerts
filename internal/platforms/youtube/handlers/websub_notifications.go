@@ -43,23 +43,32 @@ func HandleAlertNotification(w http.ResponseWriter, r *http.Request, opts AlertN
 	var feed youtubeFeed
 	decoder := xml.NewDecoder(io.LimitReader(r.Body, 1<<20))
 	if err := decoder.Decode(&feed); err != nil {
+		if opts.Logger != nil {
+			opts.Logger.Printf("failed to decode hub notification from %s: %v", r.RemoteAddr, err)
+		}
 		http.Error(w, "invalid atom feed", http.StatusBadRequest)
 		return true
 	}
 
 	if len(feed.Entries) == 0 {
+		if opts.Logger != nil {
+			opts.Logger.Printf("hub notification from %s contained no entries", r.RemoteAddr)
+		}
 		w.WriteHeader(http.StatusNoContent)
 		return true
 	}
 
 	videoIDs := extractVideoIDs(feed)
+	if opts.Logger != nil {
+		opts.Logger.Printf("Processing hub notification (%d entries) videos=%s channel=%s", len(feed.Entries), strings.Join(videoIDs, ","), feed.Entries[0].ChannelID)
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
 	videoInfo, err := opts.VideoLookup.Fetch(ctx, videoIDs)
 	if err != nil {
 		if opts.Logger != nil {
-			opts.Logger.Printf("failed to fetch live metadata: %v", err)
+			opts.Logger.Printf("failed to fetch live metadata for videos %s: %v", strings.Join(videoIDs, ","), err)
 		}
 		w.WriteHeader(http.StatusAccepted)
 		return true
@@ -69,6 +78,13 @@ func HandleAlertNotification(w http.ResponseWriter, r *http.Request, opts AlertN
 	for _, entry := range feed.Entries {
 		info, ok := videoInfo[entry.VideoID]
 		if !ok || !info.IsLive() {
+			if opts.Logger != nil {
+				if !ok {
+					opts.Logger.Printf("no metadata returned for video %s, skipping", entry.VideoID)
+				} else {
+					opts.Logger.Printf("video %s (%s) not live; broadcast=%q start=%s", entry.VideoID, entry.Title, info.LiveBroadcastContent, info.ActualStartTime)
+				}
+			}
 			continue
 		}
 		startedAt := info.ActualStartTime
