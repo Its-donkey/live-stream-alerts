@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestAppendAndList(t *testing.T) {
@@ -69,6 +70,54 @@ func TestAppendDuplicateAlias(t *testing.T) {
 	second := Record{Streamer: Streamer{Alias: "EdgeCrafter!!"}}
 	if _, err := Append(path, second); !errors.Is(err, ErrDuplicateAlias) {
 		t.Fatalf("expected duplicate alias error, got %v", err)
+	}
+}
+
+func TestUpdateYouTubeLiveStatus(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "streamers.json")
+	_, err := Append(path, Record{
+		Streamer: Streamer{Alias: "Edge Crafter"},
+		Platforms: Platforms{
+			YouTube: &YouTubePlatform{ChannelID: "UCdemo"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	started := time.Date(2025, 11, 16, 9, 2, 41, 0, time.UTC)
+	updated, err := UpdateYouTubeLiveStatus(path, "UCdemo", YouTubeLiveStatus{
+		Live:      true,
+		VideoID:   "video123",
+		StartedAt: started,
+	})
+	if err != nil {
+		t.Fatalf("update live: %v", err)
+	}
+	if !updated.Status.Live || updated.Status.YouTube == nil || !updated.Status.YouTube.Live {
+		t.Fatalf("expected live status to be true")
+	}
+	if updated.Status.YouTube.VideoID != "video123" {
+		t.Fatalf("unexpected video id %q", updated.Status.YouTube.VideoID)
+	}
+	if !updated.Status.YouTube.StartedAt.Equal(started) {
+		t.Fatalf("expected start time %v got %v", started, updated.Status.YouTube.StartedAt)
+	}
+
+	updated, err = UpdateYouTubeLiveStatus(path, "UCdemo", YouTubeLiveStatus{Live: false})
+	if err != nil {
+		t.Fatalf("update offline: %v", err)
+	}
+	if updated.Status.Live || (updated.Status.YouTube != nil && updated.Status.YouTube.Live) {
+		t.Fatalf("expected live status to be cleared")
+	}
+	if updated.Status.YouTube != nil && updated.Status.YouTube.VideoID != "" {
+		t.Fatalf("expected video id cleared, got %q", updated.Status.YouTube.VideoID)
+	}
+
+	if _, err := UpdateYouTubeLiveStatus(path, "missing", YouTubeLiveStatus{Live: true}); !errors.Is(err, ErrStreamerNotFound) {
+		t.Fatalf("expected not found, got %v", err)
 	}
 }
 

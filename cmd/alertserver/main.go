@@ -37,6 +37,7 @@ func main() {
 	router := apiv1.NewRouter(apiv1.Options{
 		Logger:        logger,
 		StreamersPath: streamers.DefaultFilePath,
+		YouTubeAPIKey: config.YT.DataAPIKey,
 		RuntimeInfo: apiv1.RuntimeInfo{
 			Name:        "live-stream-alerts",
 			Addr:        addr,

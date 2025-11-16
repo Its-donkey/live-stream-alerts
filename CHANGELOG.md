@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 ### Added
+- Parse incoming YouTube WebSub notifications, query the Data API for live metadata, and persist streamer `status` details whenever a live broadcast starts so downstream tooling can react instantly.
 - Introduced the v1 HTTP router with request-dump logging so every inbound request is captured alongside the YouTube alert verification endpoint.
 - Added the `/api/youtube/subscribe` proxy that forwards JSON payloads to the YouTube PubSubHubbub hub while applying the required defaults.
 - Added the `/api/youtube/unsubscribe` endpoint so operators can stop receiving hub callbacks for a topic without editing configs manually.

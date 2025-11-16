@@ -3,8 +3,10 @@ package v1
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"live-stream-alerts/internal/logging"
+	"live-stream-alerts/internal/platforms/youtube/liveinfo"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
 	streamershandlers "live-stream-alerts/internal/streamers/handlers"
 )
@@ -23,6 +25,7 @@ type Options struct {
 	Logger        logging.Logger
 	RuntimeInfo   RuntimeInfo
 	StreamersPath string
+	YouTubeAPIKey string
 }
 
 // NewRouter constructs the HTTP router for the public API.
@@ -46,7 +49,16 @@ func NewRouter(opts Options) http.Handler {
 	}))
 	mux.Handle("/api/streamers", streamersHandler)
 
-	alertsHandler := handleAlerts(logger, streamersPath)
+	var videoLookup youtubehandlers.LiveVideoLookup
+	if key := strings.TrimSpace(opts.YouTubeAPIKey); key != "" {
+		videoLookup = &liveinfo.Client{APIKey: key}
+	}
+
+	alertsHandler := handleAlerts(handleAlertsOptions{
+		Logger:        logger,
+		StreamersPath: streamersPath,
+		VideoLookup:   videoLookup,
+	})
 	mux.Handle("/alerts", alertsHandler)
 	mux.Handle("/alert", alertsHandler)
 
@@ -70,11 +82,24 @@ func respondJSON(w http.ResponseWriter, payload any) {
 	}
 }
 
-func handleAlerts(logger logging.Logger, streamersPath string) http.Handler {
+type handleAlertsOptions struct {
+	Logger        logging.Logger
+	StreamersPath string
+	VideoLookup   youtubehandlers.LiveVideoLookup
+}
+
+func handleAlerts(opts handleAlertsOptions) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if youtubehandlers.HandleSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
-			Logger:        logger,
-			StreamersPath: streamersPath,
+			Logger:        opts.Logger,
+			StreamersPath: opts.StreamersPath,
+		}) {
+			return
+		}
+		if youtubehandlers.HandleAlertNotification(w, r, youtubehandlers.AlertNotificationOptions{
+			Logger:        opts.Logger,
+			StreamersPath: opts.StreamersPath,
+			VideoLookup:   opts.VideoLookup,
 		}) {
 			return
 		}

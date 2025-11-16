@@ -24,6 +24,9 @@ The WebSub defaults can be configured via environment variables or CLI flags (fl
 | `-youtube-lease-seconds` | `YOUTUBE_LEASE_SECONDS` | Lease duration requested during subscribe/unsubscribe. | `864000` |
 | `-youtube-default-mode` | `YOUTUBE_DEFAULT_MODE` | WebSub mode enforced when omitted (typically `subscribe`). | `subscribe` |
 | `-youtube-verify-mode` | `YOUTUBE_VERIFY_MODE` | Verification strategy requested (`sync` or `async`). | `async` |
+| _(config only)_ | `YOUTUBE_DATA_API_KEY` | API key used to query video metadata when handling YouTube push notifications. | _(unset)_ |
+
+Set the `YOUTUBE_DATA_API_KEY` environment variable (or populate `data_api_key` in `config.json`) to allow the server to call the YouTube Data API when `/alerts` receives push notifications. When a live broadcast notification arrives, the server now fetches the associated video metadata and updates the matching streamer record’s `status` so downstream tooling can display who is live in real time.
 
 ## API reference
 All HTTP routes are registered in `internal/api/v1/router.go`. Update the table below whenever an endpoint is added or altered so this README remains the single source of truth.
