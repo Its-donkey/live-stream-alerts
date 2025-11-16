@@ -39,6 +39,7 @@
 - Programmatic YouTube subscriptions now reuse the configured verify mode and lease duration so hub requests keep honoring `config.json` overrides.
 - Normalized all YouTube WebSub defaults (callback URL, lease duration, verification mode) inside the handler so clients can omit them safely.
 - Alert verification logging now includes the exact challenge response body so the terminal reflects what was sent back to YouTube.
+- Server output and logs are now mirrored into `data/alertserver.log` so operational history persists across restarts.
 - Accepts `/alert` as an alias for `/alerts` so PubSubHubBub callbacks from older reverse-proxy configs are handled correctly.
 - Fixed the router and verification handler so both `/alert` and `/alerts` paths are actually registered, preventing 404s when Google hits the legacy plural route.
 - Expanded YouTube hub verification logging to include the full HTTP dump and planned response so challenges can be reviewed before they’re sent.
