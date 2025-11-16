@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"time"
@@ -55,13 +56,23 @@ func newSubscriptionHandler(mode, logLabel string, opts SubscriptionHandlerOptio
 		}
 
 		req.Mode = mode
-		if req.LeaseSeconds <= 0 {
+		if req.LeaseSeconds <= 0 && mode == "subscribe" {
 			req.LeaseSeconds = config.YT.LeaseSeconds
 		}
 
 		resp, body, finalReq, err := subscriptions.SubscribeYouTube(r.Context(), client, opts.Logger, req)
-		if err != nil && opts.Logger != nil {
-			opts.Logger.Printf("%s hub response: %v", logLabel, err)
+		if err != nil {
+			if opts.Logger != nil {
+				opts.Logger.Printf("%s hub response: %v", logLabel, err)
+			}
+			if resp == nil {
+				status := http.StatusBadGateway
+				if errors.Is(err, subscriptions.ErrValidation) {
+					status = http.StatusBadRequest
+				}
+				http.Error(w, err.Error(), status)
+				return
+			}
 		}
 		if resp == nil {
 			http.Error(w, "hub request failed", http.StatusBadGateway)

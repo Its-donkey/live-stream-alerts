@@ -18,6 +18,9 @@ import (
 	"live-stream-alerts/internal/platforms/youtube/websub"
 )
 
+// ErrValidation signals that the request payload is missing required fields.
+var ErrValidation = errors.New("validation error")
+
 // YouTubeRequest models the fields required by YouTube's WebSub subscription flow.
 type YouTubeRequest struct {
 	HubURL       string
@@ -65,7 +68,7 @@ func SubscribeYouTube(
 	}
 
 	if strings.TrimSpace(req.Topic) == "" {
-		return nil, nil, req, errors.New("topic is required")
+		return nil, nil, req, fmt.Errorf("%w: topic is required", ErrValidation)
 	}
 
 	// Resolve callback: request overrides config.
@@ -79,7 +82,7 @@ func SubscribeYouTube(
 
 	mode := strings.TrimSpace(req.Mode)
 	if mode == "" {
-		return nil, nil, req, errors.New("subscribe or unsubscribe must be set as mode")
+		return nil, nil, req, fmt.Errorf("%w: subscribe or unsubscribe must be set as mode", ErrValidation)
 	}
 
 	// Resolve verify: request overrides config.

@@ -33,6 +33,10 @@
 - Removed the `createdAt` requirement from `DELETE /api/streamers/{id}` so operators only need to provide the streamer ID when deleting records.
 - The subscribe handler now mirrors the hub's HTTP response (body/status) to the API client and falls back to the upstream status text when the hub omits a body.
 - Consolidated the YouTube subscribe/unsubscribe handlers into a single JSON proxy, defaulting hub settings consistently and relocating lease tracking into the subscriptions package.
+- Validation errors for `/api/youtube/subscribe` and `/api/youtube/unsubscribe` now surface as `400 Bad Request` responses so clients can correct their payloads instead of seeing `502 Bad Gateway`.
+- `/api/youtube/unsubscribe` no longer requests a lease duration, allowing hub callbacks that omit `hub.lease_seconds` to complete successfully.
+- YouTube hub verification now skips lease-duration comparisons (and lease writes) for unsubscribe callbacks so removing a subscription no longer fails or records a false renewal.
+- Programmatic YouTube subscriptions now reuse the configured verify mode and lease duration so hub requests keep honoring `config.json` overrides.
 - Normalized all YouTube WebSub defaults (callback URL, lease duration, verification mode) inside the handler so clients can omit them safely.
 - Alert verification logging now includes the exact challenge response body so the terminal reflects what was sent back to YouTube.
 - Accepts `/alert` as an alias for `/alerts` so PubSubHubBub callbacks from older reverse-proxy configs are handled correctly.

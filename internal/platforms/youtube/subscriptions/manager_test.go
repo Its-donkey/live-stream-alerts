@@ -61,6 +61,15 @@ func TestSubscribeValidatesChannelID(t *testing.T) {
 
 func TestSubscribeSuccess(t *testing.T) {
 	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("parse form: %v", err)
+		}
+		if got := r.Form.Get("hub.verify"); got != "async" {
+			t.Fatalf("expected verify async, got %s", got)
+		}
+		if got := r.Form.Get("hub.lease_seconds"); got != "60" {
+			t.Fatalf("expected lease seconds 60, got %s", got)
+		}
 		w.WriteHeader(http.StatusAccepted)
 	}))
 	defer hub.Close()
@@ -99,6 +108,75 @@ func TestSubscribeResolvesChannelIDFromHandle(t *testing.T) {
 
 	if err := ManageSubscription(context.Background(), record, Options{Client: client, Mode: "subscribe"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestUnsubscribeOmitsLeaseSeconds(t *testing.T) {
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("parse form: %v", err)
+		}
+		if got := r.Form.Get("hub.lease_seconds"); got != "" {
+			t.Fatalf("expected lease seconds omitted, got %q", got)
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer hub.Close()
+
+	configureTestYouTube(t, hub.URL)
+	record := streamers.Record{
+		Streamer: streamers.Streamer{Alias: "Test"},
+		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{
+			ChannelID: "UC123",
+		}},
+	}
+
+	if err := ManageSubscription(context.Background(), record, Options{Client: hub.Client(), HubURL: hub.URL, Mode: "unsubscribe"}); err != nil {
+		t.Fatalf("unsubscribe returned error: %v", err)
+	}
+}
+
+func TestUnsubscribeUsesStoredContext(t *testing.T) {
+	const (
+		customTopic    = "https://feeds.example.com/custom"
+		storedCallback = "https://callback.old.example.com/hook"
+	)
+	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("parse form: %v", err)
+		}
+		if got := r.Form.Get("hub.callback"); got != storedCallback {
+			t.Fatalf("expected callback %s, got %s", storedCallback, got)
+		}
+		if got := r.Form.Get("hub.topic"); got != customTopic {
+			t.Fatalf("expected topic %s, got %s", customTopic, got)
+		}
+		if got := r.Form.Get("hub.verify"); got != "sync" {
+			t.Fatalf("expected verify sync, got %s", got)
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer hub.Close()
+
+	configureTestYouTube(t, "https://config-hub.example.com")
+	record := streamers.Record{
+		Streamer: streamers.Streamer{Alias: "Test"},
+		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{
+			ChannelID:   "UC123",
+			HubSecret:   "secret",
+			Topic:       customTopic,
+			CallbackURL: storedCallback,
+			HubURL:      hub.URL,
+			VerifyMode:  "sync",
+		}},
+	}
+
+	if err := ManageSubscription(
+		context.Background(),
+		record,
+		Options{Client: hub.Client(), HubURL: "https://ignored", Mode: "unsubscribe"},
+	); err != nil {
+		t.Fatalf("unsubscribe returned error: %v", err)
 	}
 }
 

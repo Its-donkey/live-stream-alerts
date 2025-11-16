@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"live-stream-alerts/config"
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 	"live-stream-alerts/internal/streamers"
@@ -15,10 +16,12 @@ import (
 
 // Options configures how subscriptions are issued.
 type Options struct {
-	Client *http.Client
-	HubURL string
-	Logger logging.Logger
-	Mode   string // subscribe or unsubscribe; must be provided
+	Client       *http.Client
+	HubURL       string
+	Logger       logging.Logger
+	Mode         string // subscribe or unsubscribe; must be provided
+	Verify       string
+	LeaseSeconds int
 }
 
 // getLogger returns an appropriate logger, defaulting when none is provided.
@@ -65,7 +68,10 @@ func buildYouTubeSubscriptionData(
 	}
 
 	secret = strings.TrimSpace(yt.HubSecret)
-	topic = fmt.Sprintf("https://www.youtube.com/xml/feeds/videos.xml?channel_id=%s", channelID)
+	topic = strings.TrimSpace(yt.Topic)
+	if topic == "" {
+		topic = fmt.Sprintf("https://www.youtube.com/xml/feeds/videos.xml?channel_id=%s", channelID)
+	}
 
 	return channelID, topic, secret, nil
 }
@@ -76,6 +82,7 @@ func ManageSubscription(ctx context.Context, record streamers.Record, opts Optio
 	if record.Platforms.YouTube == nil {
 		return nil
 	}
+	yt := record.Platforms.YouTube
 
 	mode := strings.TrimSpace(opts.Mode)
 	if mode == "" {
@@ -90,14 +97,42 @@ func ManageSubscription(ctx context.Context, record streamers.Record, opts Optio
 		return err
 	}
 
+	verify := strings.TrimSpace(yt.VerifyMode)
+	if verify == "" {
+		verify = strings.TrimSpace(opts.Verify)
+	}
+	if verify == "" {
+		verify = strings.TrimSpace(config.YT.Verify)
+	}
+	if verify == "" {
+		verify = "async"
+	}
+	leaseSeconds := yt.LeaseSeconds
+	if leaseSeconds <= 0 {
+		leaseSeconds = opts.LeaseSeconds
+	}
+	if strings.EqualFold(mode, "subscribe") {
+		if leaseSeconds <= 0 {
+			leaseSeconds = config.YT.LeaseSeconds
+		}
+	} else {
+		leaseSeconds = 0
+	}
+	hubURL := strings.TrimSpace(yt.HubURL)
+	if hubURL == "" {
+		hubURL = strings.TrimSpace(opts.HubURL)
+	}
+	callback := strings.TrimSpace(yt.CallbackURL)
+
 	subscribeReq := YouTubeRequest{
-		HubURL:    strings.TrimSpace(opts.HubURL), // may be empty; SubscribeYouTube will fall back to config
-		Topic:     topic,
-		Secret:    secret,
-		Verify:    "async",
-		ChannelID: channelID,
-		Mode:      mode,
-		// Callback left empty here; SubscribeYouTube will use config.YT.CallbackURL
+		HubURL:       hubURL,
+		Topic:        topic,
+		Callback:     callback,
+		Secret:       secret,
+		Verify:       verify,
+		ChannelID:    channelID,
+		Mode:         mode,
+		LeaseSeconds: leaseSeconds,
 	}
 
 	resp, body, finalReq, err := SubscribeYouTube(ctx, client, logger, subscribeReq)
