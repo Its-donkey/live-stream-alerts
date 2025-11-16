@@ -41,6 +41,9 @@ func NewRouter(opts Options) http.Handler {
 	mux.Handle("/api/youtube/subscribe", youtubehandlers.NewSubscribeHandler(youtubehandlers.SubscribeHandlerOptions{
 		Logger: logger,
 	}))
+	mux.Handle("/api/youtube/unsubscribe", youtubehandlers.NewUnsubscribeHandler(youtubehandlers.UnsubscribeHandlerOptions{
+		Logger: logger,
+	}))
 	mux.Handle("/api/streamers", streamersHandler)
 
 	alertsHandler := handleAlerts(logger, streamersPath)

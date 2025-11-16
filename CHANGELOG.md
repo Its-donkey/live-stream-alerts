@@ -4,6 +4,7 @@
 ### Added
 - Introduced the v1 HTTP router with request-dump logging so every inbound request is captured alongside the YouTube alert verification endpoint.
 - Added the `/api/youtube/subscribe` proxy that forwards JSON payloads to the YouTube PubSubHubbub hub while applying the required defaults.
+- Added the `/api/youtube/unsubscribe` endpoint so operators can stop receiving hub callbacks for a topic without editing configs manually.
 - Added the `/api/youtube/channel` lookup endpoint to convert @handles into canonical UC channel IDs.
 - Added POST `/api/streamers` to persist streamer metadata into `data/streamers.json` for multi-platform support.
 - Added GET `/api/streamers` so clients can list every stored streamer record.
@@ -38,6 +39,7 @@
 - Issued unique `hub.verify_token` values for every subscription and reject hub challenges whose topic/token/lease don’t match what was registered (mirroring the configured HMAC secret).
 - Consolidated all logging through the internal logger package so runtime output shares consistent formatting regardless of entry point, including a blank spacer line before every timestamped entry for readability.
 - Added explicit logging after sending the hub challenge reply so the status/body echoed back to YouTube are captured.
+- Made the YouTube WebSub defaults configurable through environment variables or CLI flags so deployments are not tied to baked-in hub/callback values.
 ### Fixed
 - Persist `streamer.alias` when creating records and require it as the primary identifier so requests without names no longer lose the alias field.
 - Removed references to the deprecated `/api/youtube/new/subscribe` alias so the README only lists active endpoints.
@@ -46,5 +48,5 @@
 - Added the missing list/delete handler implementations so the `/api/streamers` handler actually builds with GET/POST/DELETE support.
 - Restored the YouTube metadata handler import so `/api/youtube/metadata` compiles and keeps using the dedicated scraping package.
 - Registered `/api/streamers/` alongside `/api/streamers` so DELETE requests to `/api/streamers/{id}` reach the handler instead of 404ing.
-- Restored the previous subscribe defaulting behavior so `NormaliseSubscribeRequest` only fills in blank fields, allowing clients to override callback/hub/verify/lease values.
+- Restored the subscribe/unsubscribe defaulting behavior so `NormaliseSubscribeRequest` and `NormaliseUnsubscribeRequest` only fill in blank fields, allowing clients to override callback/hub/verify/lease values.
 - DELETE `/api/streamers/{id}` now validates `streamer.createdAt` locally so malformed timestamps return `400 Bad Request` instead of surfacing as `500` errors.
