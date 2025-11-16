@@ -21,6 +21,7 @@
 - Added a root `.gitignore` to drop editor/OS cruft, `cmd/alertserver/out.bin`, and other generated artifacts (including generated WebAssembly binaries).
 - Added a root `README.md` with setup instructions and a canonical list of every HTTP endpoint so future additions stay documented.
 ### Changed
+- Allowed `streamer.firstName`, `streamer.lastName`, and `streamer.email` fields to be blank in the JSON schema so optional contact details no longer trigger validation errors.
 - Moved the HTTP router under `internal/api/v1` and updated docs/CLI tooling so future endpoints live under their API versioned package.
 - Relocated metadata scraping into the YouTube platform tree and corralled all YouTube handlers/clients/subscribers beneath `internal/platforms/youtube/{api,metadata,store,subscriptions}` for clearer ownership.
 - Simplified `POST /api/streamers` to accept only alias/description/languages plus a single YouTube channel URL, deriving the streamer ID, resolving channel metadata, generating a hub secret, updating the store, and triggering subscriptions automatically.
