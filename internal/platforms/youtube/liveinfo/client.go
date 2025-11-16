@@ -8,9 +8,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
-	"unicode"
 )
 
 // Client fetches live metadata by scraping YouTube watch pages (no API key required).
@@ -124,53 +124,20 @@ func (c *Client) fetchSingle(ctx context.Context, client *http.Client, baseURL, 
 	return info, nil
 }
 
+var playerResponsePattern = regexp.MustCompile(`(?s)ytInitialPlayerResponse\s*=\s*(\{.+?\});`)
+
 func extractPlayerResponse(body string) (string, error) {
-	marker := "ytInitialPlayerResponse"
-	idx := strings.Index(body, marker)
-	if idx == -1 {
+	match := playerResponsePattern.FindStringSubmatch(body)
+	if len(match) < 2 {
 		return "", errors.New("player response not found")
 	}
-	start := idx + len(marker)
-	for start < len(body) && (body[start] == ' ' || body[start] == '\n' || body[start] == '\r' || body[start] == '\t' || body[start] == '=') {
-		start++
-	}
-	for start < len(body) && unicode.IsSpace(rune(body[start])) {
-		start++
-	}
-	if start >= len(body) {
-		return "", errors.New("player response malformed")
-	}
-	for start < len(body) && body[start] != '{' {
-		start++
-	}
-	if start >= len(body) {
-		return "", errors.New("player response JSON missing")
-	}
-
-	braces := 0
-	end := -1
-	for i := start; i < len(body); i++ {
-		switch body[i] {
-		case '{':
-			braces++
-		case '}':
-			braces--
-			if braces == 0 {
-				end = i + 1
-				break
-			}
-		}
-	}
-	if end == -1 {
-		return "", errors.New("player response incomplete")
-	}
-	return body[start:end], nil
+	return strings.TrimSpace(match[1]), nil
 }
 
 func sanitizeJSON(raw string) string {
 	trimmed := strings.TrimSpace(raw)
-	for len(trimmed) > 0 && trimmed[len(trimmed)-1] == ';' {
-		trimmed = strings.TrimSpace(trimmed[:len(trimmed)-1])
+	for strings.HasSuffix(trimmed, ";") {
+		trimmed = strings.TrimSpace(strings.TrimSuffix(trimmed, ";"))
 	}
 	return trimmed
 }
