@@ -105,6 +105,8 @@ func (c *Client) fetchSingle(ctx context.Context, client *http.Client, baseURL, 
 		return VideoInfo{}, err
 	}
 
+	playerJSON = sanitizeJSON(playerJSON)
+
 	var payload playerResponse
 	if err := json.Unmarshal([]byte(playerJSON), &payload); err != nil {
 		return VideoInfo{}, fmt.Errorf("decode player response: %w", err)
@@ -163,6 +165,14 @@ func extractPlayerResponse(body string) (string, error) {
 		return "", errors.New("player response incomplete")
 	}
 	return body[start:end], nil
+}
+
+func sanitizeJSON(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	for len(trimmed) > 0 && trimmed[len(trimmed)-1] == ';' {
+		trimmed = strings.TrimSpace(trimmed[:len(trimmed)-1])
+	}
+	return trimmed
 }
 
 func sanitizeIDs(ids []string) []string {

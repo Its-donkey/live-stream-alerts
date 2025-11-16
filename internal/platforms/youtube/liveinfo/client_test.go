@@ -17,7 +17,7 @@ func TestClientFetchParsesLivePage(t *testing.T) {
 			t.Fatalf("missing video id")
 		}
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(`<!doctype html><html><head><script>var ytInitialPlayerResponse = {"videoDetails":{"videoId":"abc123","channelId":"UCdemo","title":"Live demo","isLiveContent":true},"microformat":{"playerMicroformatRenderer":{"liveBroadcastDetails":{"startTimestamp":"2025-11-16T09:02:41Z"}}}};</script></head><body></body></html>`))
+		w.Write([]byte(`<!doctype html><html><head><script>var ytInitialPlayerResponse = {"videoDetails":{"videoId":"abc123","channelId":"UCdemo","title":"Live demo","isLiveContent":true},"microformat":{"playerMicroformatRenderer":{"liveBroadcastDetails":{"startTimestamp":"2025-11-16T09:02:41Z"}}}};;</script></head><body></body></html>`))
 	}))
 	defer server.Close()
 
