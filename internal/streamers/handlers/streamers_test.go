@@ -104,8 +104,8 @@ func TestStreamersHandlerPostSuccess(t *testing.T) {
 	if record.Streamer.Alias != "Test Alias" {
 		t.Fatalf("expected alias to be stored, got %q", record.Streamer.Alias)
 	}
-	if record.Streamer.ID != "TestAlias" {
-		t.Fatalf("expected ID to be derived from alias, got %q", record.Streamer.ID)
+	if id := record.Streamer.ID; len(id) != 32 {
+		t.Fatalf("expected generated 32 character ID, got %q", id)
 	}
 	if len(record.Streamer.Languages) != 2 {
 		t.Fatalf("expected duplicate languages removed, got %v", record.Streamer.Languages)
@@ -117,6 +117,38 @@ func TestStreamersHandlerPostSuccess(t *testing.T) {
 	}
 	if len(records) != 1 {
 		t.Fatalf("expected one record persisted, got %d", len(records))
+	}
+}
+
+func TestStreamersHandlerPostDuplicateAlias(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "streamers.json")
+	handler := StreamersHandler(StreamOptions{FilePath: path})
+
+	first := map[string]any{
+		"streamer": map[string]any{
+			"alias": "Edge Crafter",
+		},
+		"platforms": map[string]any{},
+	}
+	second := map[string]any{
+		"streamer": map[string]any{
+			"alias": "EdgeCrafter!!!",
+		},
+		"platforms": map[string]any{},
+	}
+
+	for idx, payload := range []map[string]any{first, second} {
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/api/streamers", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if idx == 0 && rr.Code != http.StatusCreated {
+			t.Fatalf("expected first record to succeed, got %d", rr.Code)
+		}
+		if idx == 1 && rr.Code != http.StatusConflict {
+			t.Fatalf("expected duplicate alias to return 409, got %d", rr.Code)
+		}
 	}
 }
 

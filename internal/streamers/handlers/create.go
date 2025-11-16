@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"unicode"
 
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/onboarding"
@@ -42,7 +41,7 @@ func createStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 
 	record, err = streamers.Append(path, record)
 	if err != nil {
-		if errors.Is(err, streamers.ErrDuplicateStreamerID) {
+		if errors.Is(err, streamers.ErrDuplicateStreamerID) || errors.Is(err, streamers.ErrDuplicateAlias) {
 			http.Error(w, "a streamer with that alias already exists", http.StatusConflict)
 			return
 		}
@@ -81,8 +80,8 @@ func buildRecord(req createRequest) (streamers.Record, error) {
 	if alias == "" {
 		return streamers.Record{}, fmt.Errorf("streamer.alias is required")
 	}
-	streamerID := sanitiseAliasForID(alias)
-	if streamerID == "" {
+
+	if streamers.NormaliseAlias(alias) == "" {
 		return streamers.Record{}, fmt.Errorf("streamer.alias must contain at least one letter or digit")
 	}
 
@@ -93,7 +92,7 @@ func buildRecord(req createRequest) (streamers.Record, error) {
 
 	record := streamers.Record{
 		Streamer: streamers.Streamer{
-			ID:          streamerID,
+			ID:          streamers.GenerateID(),
 			Alias:       alias,
 			Description: strings.TrimSpace(req.Streamer.Description),
 			Languages:   langs,
@@ -102,16 +101,6 @@ func buildRecord(req createRequest) (streamers.Record, error) {
 	}
 
 	return record, nil
-}
-
-func sanitiseAliasForID(alias string) string {
-	var builder strings.Builder
-	for _, r := range alias {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			builder.WriteRune(r)
-		}
-	}
-	return builder.String()
 }
 
 func sanitiseLanguages(values []string) ([]string, error) {
