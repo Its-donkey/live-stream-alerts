@@ -1,18 +1,22 @@
 # live-stream-alerts
 
-A lightweight Go service that proxies YouTube WebSub subscriptions, stores streamer metadata, and exposes operational endpoints for downstream automation. The companion WebAssembly UI now lives in a sibling project and consumes these APIs separately.
+A lightweight Go service that proxies YouTube WebSub subscriptions, stores streamer metadata, and exposes operational endpoints for downstream automation. The companion WebAssembly UI is embedded directly into the binary, so running the alert server automatically serves the dashboard.
 
 ## Requirements
 - Go 1.21+
 - (Optional) `make` for your own helper scripts
 
 ## Running the alert server
-1. Start the HTTP server:
+1. (Optional) Rebuild the embedded UI if you changed any files under the sibling `alGUI/` folder (the UI source lives alongside this repository):
+   ```bash
+   go generate ./internal/ui
+   ```
+   This recompiles the WASM bundle and copies the refreshed static assets into `internal/ui/dist` so they’re embedded at build time.
+2. Start the HTTP server:
    ```bash
    go run ./cmd/alertserver
    ```
-2. Streamer data is appended to `data/streamers.json`. Provide a different path through `CreateOptions.FilePath` if you embed the handler elsewhere.
-3. (Optional) Build and host the standalone UI from the sibling project if you need a dashboard; it talks to these APIs over HTTP and no longer ships with the server binary (this repository intentionally stays API-only).
+3. Streamer data is appended to `data/streamers.json`. Provide a different path through `CreateOptions.FilePath` if you embed the handler elsewhere. The dashboard is now available at `/` using the embedded assets, so no extra static server is required.
 
 ## Configuration
 The WebSub defaults can be configured via environment variables or CLI flags (flags take precedence):
@@ -41,6 +45,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 | DELETE | `/api/streamers`             | Removes a stored streamer record. |
 | POST   | `/api/youtube/metadata`     | Scrapes a public URL and returns its meta description/title. |
 | GET    | `/api/server/config`         | Returns the server runtime information consumed by the UI. |
+| GET    | `/`                          | Serves the embedded alGUI dashboard (HTML + WASM). |
 
 ### GET `/alerts`
 - **Purpose:** Handles `hub.challenge` callbacks from YouTube during WebSub verification.
@@ -176,7 +181,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 - **Notes:** Only `http`/`https` URLs are allowed. A `502` is returned if scraping fails or the metadata cannot be extracted.
 
 ### Static asset hosting
-- Requests to `/` now respond with `200 OK` and `"UI assets not configured"`. The standalone UI is built, versioned, and hosted from the sibling project instead of bundling inside this repository.
+- Requests to `/` now serve the embedded alGUI dashboard so the API and UI are deployed from the same binary.
 
 ## Keeping this document current
 Whenever you introduce or modify an endpoint:

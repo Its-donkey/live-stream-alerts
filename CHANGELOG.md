@@ -33,7 +33,7 @@
 - Added dedicated GET/POST/DELETE handler coverage for `/api/streamers` and now advertise all supported methods via the `Allow` header (including `DELETE`) so clients can reliably introspect the endpoint.
 - Dropped the `/v1` segment from every public API path (for example, `/api/v1/streamers` is now `/api/streamers`) to simplify client integrations.
 - Documented the shared `/api/streamers` handler (README + Postman collection) so clients understand DELETE lives on the same base path as GET/POST and can rely on the `Allow` header.
-- Extracted the WebAssembly UI into a sibling project so this repository now focuses solely on the alert server APIs.
+- Embedded the WebAssembly UI directly into the alert server binary so a single process now serves both the dashboard and the APIs.
 - Renamed the metadata scraping endpoint to `/api/youtube/metadata` (including handler types) so the path and code align with what the endpoint returns.
 - Removed the `createdAt` requirement from `DELETE /api/streamers/{id}` so operators only need to provide the streamer ID when deleting records.
 - The subscribe handler now mirrors the hub's HTTP response (body/status) to the API client and falls back to the upstream status text when the hub omits a body.

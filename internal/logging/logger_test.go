@@ -121,3 +121,25 @@ func TestLoggingResponseWriterTruncatesLargeBodies(t *testing.T) {
 		t.Fatalf("expected truncation notice, got %q", body)
 	}
 }
+
+type flushRecorder struct {
+	http.ResponseWriter
+	flushed bool
+}
+
+func (f *flushRecorder) Flush() {
+	f.flushed = true
+}
+
+func TestLoggingResponseWriterImplementsFlusher(t *testing.T) {
+	fr := &flushRecorder{ResponseWriter: httptest.NewRecorder()}
+	lrw := newLoggingResponseWriter(fr)
+	flusher, ok := interface{}(lrw).(http.Flusher)
+	if !ok {
+		t.Fatalf("expected loggingResponseWriter to implement http.Flusher")
+	}
+	flusher.Flush()
+	if !fr.flushed {
+		t.Fatalf("expected underlying flusher to be invoked")
+	}
+}

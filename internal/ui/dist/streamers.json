@@ -1,0 +1,138 @@
+{
+  "$schema": "../live-stream-alerts/schema/streamers.schema.json",
+  "streamers": [
+    {
+      "streamer": {
+        "id": "JordanMatter",
+        "alias": "Jordan Matter",
+        "description": "My daughter has taken over my channel!",
+        "languages": ["English"]
+      },
+      "platforms": {
+        "youtube": {
+          "handle": "@jordanmatter",
+          "channelId": "UCI3szCgzGTRBTF_2dVaTZdQ",
+          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCI3szCgzGTRBTF_2dVaTZdQ",
+          "callbackUrl": "https://sharpen.live/alerts",
+          "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
+          "verifyMode": "async",
+          "leaseSeconds": 864000,
+          "hubSecret": "demo-secret"
+        }
+      }
+    },
+    {
+      "streamer": {
+        "id": "73569d15ffeb4bd8bea1ef56f56dc34d",
+        "alias": "Ted Coningsby",
+        "description": "Oii oii! Ladies, gents and teddy bears, welcome to the fun but serious military aviation channel.",
+        "languages": ["English"]
+      },
+      "platforms": {
+        "youtube": {
+          "handle": "@TedConingsby",
+          "channelId": "UCCVgP53k4WCUnFg9yFA_YbA",
+          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCCVgP53k4WCUnFg9yFA_YbA",
+          "callbackUrl": "https://sharpen.live/alerts",
+          "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
+          "verifyMode": "async",
+          "leaseSeconds": 864000,
+          "hubSecret": "demo-secret"
+        }
+      }
+    },
+    {
+      "streamer": {
+        "id": "231eaca2f22744e49793f395430d15d1",
+        "alias": "I will shave my eyebrows",
+        "description": "Share your videos with friends, family and the world",
+        "languages": ["English"]
+      },
+      "platforms": {
+        "youtube": {
+          "handle": "@I-will-shave-my-eyebrows",
+          "channelId": "UCvwGfRXMzs2ey1h3opwK2zw",
+          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCvwGfRXMzs2ey1h3opwK2zw",
+          "callbackUrl": "https://sharpen.live/alerts",
+          "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
+          "verifyMode": "async",
+          "leaseSeconds": 864000,
+          "hubSecret": "demo-secret"
+        }
+      },
+      "status": {
+        "live": true,
+        "platforms": [
+          "youtube"
+        ],
+        "youtube": {
+          "live": true,
+          "videoId": "LSYZlRaiRTQ",
+          "startedAt": "2025-11-17T13:18:53Z"
+        }
+      }
+    },
+    {
+      "streamer": {
+        "id": "0a9d7ce8255f441198a6ed3461d320f4",
+        "alias": "Sharpen Right Services LLC - Mike White",
+        "description": "Mobile, mail-in, and on-site sharpening service based in League City, TX.",
+        "languages": ["English"]
+      },
+      "platforms": {
+        "youtube": {
+          "handle": "@sharpenrightservicesllc",
+          "channelId": "UC7d6BuAfHKTLR1l2SSg6HkA",
+          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC7d6BuAfHKTLR1l2SSg6HkA",
+          "callbackUrl": "https://sharpen.live/alerts",
+          "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
+          "verifyMode": "async",
+          "leaseSeconds": 864000,
+          "hubSecret": "demo-secret"
+        }
+      },
+      "status": {
+        "live": true,
+        "platforms": [
+          "youtube"
+        ],
+        "youtube": {
+          "live": true,
+          "videoId": "LSYZlRaiRTQ",
+          "startedAt": "2025-11-17T13:18:53Z"
+        }
+      }
+    },
+    {
+      "streamer": {
+        "id": "4dd203ee36d046e0b686600358c1de65",
+        "alias": "Judge Jeffrey Middleton",
+        "description": "Share your videos with friends, family and the world",
+        "languages": ["English"]
+      },
+      "platforms": {
+        "youtube": {
+          "handle": "@judgejeffreymiddleton7573",
+          "channelId": "UCS8gM5S889oBPyN6K07ZC6A",
+          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCS8gM5S889oBPyN6K07ZC6A",
+          "callbackUrl": "https://sharpen.live/alerts",
+          "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
+          "verifyMode": "async",
+          "leaseSeconds": 864000,
+          "hubSecret": "demo-secret"
+        }
+      },
+      "status": {
+        "live": true,
+        "platforms": [
+          "youtube"
+        ],
+        "youtube": {
+          "live": true,
+          "videoId": "LSYZlRaiRLL",
+          "startedAt": "2025-11-17T13:18:53Z"
+        }
+      }
+    }
+  ]
+}

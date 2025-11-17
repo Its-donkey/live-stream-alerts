@@ -39,8 +39,8 @@ func TestNewRouterServesConfigAndRoot(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", rr.Code)
 		}
-		if rr.Body.String() != "UI assets not configured" {
-			t.Fatalf("unexpected body %q", rr.Body.String())
+		if body := rr.Body.String(); !strings.Contains(body, "id=\"app-root\"") {
+			t.Fatalf("expected UI markup, got %q", body)
 		}
 	})
 

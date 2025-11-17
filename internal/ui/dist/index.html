@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sharpen.Live</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app-root"></div>
+
+    <script src="wasm_exec.js"></script>
+    <script type="module">
+      const go = new Go();
+      const wasmURL = new URL('main.wasm', window.location.href);
+
+      async function boot() {
+        try {
+          if ('instantiateStreaming' in WebAssembly) {
+            const { instance } = await WebAssembly.instantiateStreaming(fetch(wasmURL), go.importObject);
+            await go.run(instance);
+            return;
+          }
+
+          const response = await fetch(wasmURL);
+          const buffer = await response.arrayBuffer();
+          const { instance } = await WebAssembly.instantiate(buffer, go.importObject);
+          await go.run(instance);
+        } catch (error) {
+          const root = document.getElementById('app-root');
+          if (root) {
+            root.innerHTML = `<div class="boot-error">Unable to start alGUI.<br/>${error}</div>`;
+          }
+          console.error('Failed to boot wasm', error);
+        }
+      }
+
+      boot();
+    </script>
+  </body>
+</html>

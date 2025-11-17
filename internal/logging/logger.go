@@ -195,3 +195,9 @@ func (lrw *loggingResponseWriter) LoggedBody() string {
 	}
 	return body
 }
+
+func (lrw *loggingResponseWriter) Flush() {
+	if flusher, ok := lrw.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}

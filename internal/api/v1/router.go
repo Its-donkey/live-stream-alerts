@@ -9,6 +9,7 @@ import (
 	"live-stream-alerts/internal/logging"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
 	streamershandlers "live-stream-alerts/internal/streamers/handlers"
+	"live-stream-alerts/internal/ui"
 )
 
 // RuntimeInfo describes the pieces of server configuration that the UI exposes.
@@ -67,11 +68,7 @@ func NewRouter(opts Options) http.Handler {
 		respondJSON(w, opts.RuntimeInfo)
 	})
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("UI assets not configured"))
-	})
+	mux.Handle("/", ui.Handler())
 
 	return logging.WithHTTPLogging(mux, logger)
 }
