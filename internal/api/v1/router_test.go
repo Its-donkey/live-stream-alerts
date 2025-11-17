@@ -1,13 +1,18 @@
 package v1
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"live-stream-alerts/internal/platforms/youtube/api"
+	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 )
 
@@ -121,7 +126,64 @@ func TestAlertsRouteRejectsUnsupportedMethods(t *testing.T) {
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected 405, got %d", rr.Code)
 	}
-	if allow := rr.Header().Get("Allow"); allow != http.MethodGet {
-		t.Fatalf("expected Allow header to advertise GET, got %q", allow)
+	if allow := rr.Header().Get("Allow"); allow != http.MethodGet+", "+http.MethodPost {
+		t.Fatalf("expected Allow header to advertise GET/POST, got %q", allow)
 	}
+}
+
+func TestAlertsRouteProcessesNotifications(t *testing.T) {
+	tmp := t.TempDir()
+	streamersPath := filepath.Join(tmp, "streamers.json")
+	if err := os.WriteFile(streamersPath, []byte(`{"$schema":"","streamers":[]}`), 0o644); err != nil {
+		t.Fatalf("write streamers file: %v", err)
+	}
+
+	logger := &stubLogger{}
+	statusClient := &fakeStatusClient{statuses: map[string]api.LiveStatus{
+		"abc123": {VideoID: "abc123", IsLive: true, IsLiveNow: true, PlayabilityStatus: "OK"},
+	}}
+
+	router := NewRouter(Options{
+		Logger:        logger,
+		StreamersPath: streamersPath,
+		AlertNotifications: youtubehandlers.NotificationOptions{
+			Logger:       logger,
+			StatusClient: statusClient,
+		},
+	})
+
+	body := `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns="http://www.w3.org/2005/Atom">
+ <entry>
+  <yt:videoId>abc123</yt:videoId>
+  <yt:channelId>UC123</yt:channelId>
+  <title>Live show</title>
+ </entry>
+</feed>`
+	req := httptest.NewRequest(http.MethodPost, "/alerts", strings.NewReader(body))
+	req.Header.Set("User-Agent", "FeedFetcher-Google")
+	req.Header.Set("From", "googlebot(at)googlebot.com")
+	resp := httptest.NewRecorder()
+
+	router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", resp.Code)
+	}
+	if statusClient.calls != 1 {
+		t.Fatalf("expected live status client to be called once, got %d", statusClient.calls)
+	}
+}
+
+type fakeStatusClient struct {
+	statuses map[string]api.LiveStatus
+	calls    int
+}
+
+func (f *fakeStatusClient) LiveStatus(ctx context.Context, videoID string) (api.LiveStatus, error) {
+	f.calls++
+	if status, ok := f.statuses[videoID]; ok {
+		return status, nil
+	}
+	return api.LiveStatus{}, fmt.Errorf("unknown video %s", videoID)
 }

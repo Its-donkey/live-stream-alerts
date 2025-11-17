@@ -21,9 +21,10 @@ type RuntimeInfo struct {
 
 // Options configures the HTTP router.
 type Options struct {
-	Logger        logging.Logger
-	RuntimeInfo   RuntimeInfo
-	StreamersPath string
+	Logger             logging.Logger
+	RuntimeInfo        RuntimeInfo
+	StreamersPath      string
+	AlertNotifications youtubehandlers.NotificationOptions
 }
 
 // NewRouter constructs the HTTP router for the public API.
@@ -47,7 +48,11 @@ func NewRouter(opts Options) http.Handler {
 	}))
 	mux.Handle("/api/streamers", streamersHandler)
 
-	mux.Handle("/alerts", handleAlerts(logger, streamersPath))
+	alertsOpts := opts.AlertNotifications
+	if alertsOpts.Logger == nil {
+		alertsOpts.Logger = logger
+	}
+	mux.Handle("/alerts", handleAlerts(logger, streamersPath, alertsOpts))
 
 	mux.HandleFunc("/api/server/config", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, opts.RuntimeInfo)
@@ -70,50 +75,58 @@ func respondJSON(w http.ResponseWriter, payload any) {
 }
 
 // handleAlerts returns an HTTP handler that only treats likely Google/YouTube
-// verification requests as WebSub subscription confirmations.
-func handleAlerts(logger logging.Logger, streamersPath string) http.Handler {
+// requests as WebSub subscription confirmations/notifications.
+func handleAlerts(logger logging.Logger, streamersPath string, notificationOpts youtubehandlers.NotificationOptions) http.Handler {
+	allowedMethods := strings.Join([]string{http.MethodGet, http.MethodPost}, ", ")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Basic method and path sanity
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", http.MethodGet)
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
 		if r.URL.Path != "/alerts" {
 			http.NotFound(w, r)
 			return
 		}
 
-		// Extract headers used to judge whether this looks like Google/YouTube.
 		userAgent := r.Header.Get("User-Agent")
 		from := r.Header.Get("From")
 		forwardedFor := r.Header.Get("X-Forwarded-For")
-
 		platform := alertPlatform(userAgent, from)
 
-		if platform == "youtube" {
-			// Let the YouTube subscription confirmation handler do the real work:
-			// validate verify_token, challenge, topic, etc.
-			if youtubehandlers.HandleSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
-				Logger:        logger,
-				StreamersPath: streamersPath,
-			}) {
+		switch r.Method {
+		case http.MethodGet:
+			if platform == "youtube" {
+				if youtubehandlers.HandleSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
+					Logger:        logger,
+					StreamersPath: streamersPath,
+				}) {
+					return
+				}
+				http.Error(w, "invalid subscription confirmation", http.StatusBadRequest)
 				return
 			}
-
-			// If it got this far, the request looked like Google but didn't pass
-			// your internal validation (e.g. bad verify_token).
-			http.Error(w, "invalid subscription confirmation", http.StatusBadRequest)
-			return
+			if logger != nil {
+				logger.Printf("suspicious /alerts GET request: platform=%q ua=%q from=%q xff=%q", platform, userAgent, from, forwardedFor)
+			}
+			w.Header().Set("Allow", allowedMethods)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		case http.MethodPost:
+			if platform != "youtube" {
+				if logger != nil {
+					logger.Printf("suspicious /alerts POST request: platform=%q ua=%q from=%q xff=%q", platform, userAgent, from, forwardedFor)
+				}
+				w.Header().Set("Allow", allowedMethods)
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			opts := notificationOpts
+			if opts.Logger == nil {
+				opts.Logger = logger
+			}
+			if youtubehandlers.HandleNotification(w, r, opts) {
+				return
+			}
+			http.Error(w, "failed to process notification", http.StatusInternalServerError)
+		default:
+			w.Header().Set("Allow", allowedMethods)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
-
-		// Anything that doesn't look like a genuine Google/YouTube verification
-		// falls through to here.
-		logger.Printf("suspicious /alerts request: platform=%q ua=%q from=%q xff=%q", platform, userAgent, from, forwardedFor)
-
-		w.Header().Set("Allow", http.MethodGet)
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 }
 
@@ -123,5 +136,3 @@ func alertPlatform(userAgent, from string) string {
 	}
 	return ""
 }
-
-

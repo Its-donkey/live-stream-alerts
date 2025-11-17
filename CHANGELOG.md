@@ -20,6 +20,7 @@
 - Stubbed platform folders (`internal/platforms/{youtube,facebook,twitch}`) plus shared logging utilities to support future providers.
 - Added a root `.gitignore` to drop editor/OS cruft, `cmd/alertserver/out.bin`, and other generated artifacts (including generated WebAssembly binaries).
 - Added a root `README.md` with setup instructions and a canonical list of every HTTP endpoint so future additions stay documented.
+- Inspect POST `/alerts` WebSub notifications, parse the feed payload, and query YouTube to confirm whether the referenced video is a livestream that's currently online.
 - Rotated `data/alertserver.log` into timestamped archives under `data/logs/` on startup so each run writes to a clean file without losing history.
 ### Changed
 - Allowed `streamer.firstName`, `streamer.lastName`, and `streamer.email` fields to be blank in the JSON schema so optional contact details no longer trigger validation errors.
