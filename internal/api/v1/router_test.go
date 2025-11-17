@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"live-stream-alerts/internal/platforms/youtube/api"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
@@ -132,6 +134,37 @@ func TestAlertsRouteRejectsUnsupportedMethods(t *testing.T) {
 	}
 }
 
+func TestStreamersWatchHandlerSendsChangeEvents(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "streamers.json")
+	if err := os.WriteFile(path, []byte(`{"streamers":[]}`), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/streamers/watch", nil)
+	ctx, cancel := context.WithCancel(req.Context())
+	req = req.WithContext(ctx)
+	recorder := newSSERecorder()
+	done := make(chan struct{})
+	go func() {
+		handler := streamersWatchHandler(streamersWatchOptions{FilePath: path, PollInterval: 10 * time.Millisecond})
+		handler.ServeHTTP(recorder, req)
+		close(done)
+	}()
+	time.Sleep(25 * time.Millisecond)
+	if err := os.WriteFile(path, []byte(`{"streamers":[{"streamer":{"alias":"Test"}}]}`), 0o644); err != nil {
+		t.Fatalf("update file: %v", err)
+	}
+	time.Sleep(40 * time.Millisecond)
+	cancel()
+	<-done
+	if recorder.status != http.StatusOK {
+		t.Fatalf("expected 200, got %d", recorder.status)
+	}
+	if !strings.Contains(recorder.buf.String(), "event: change") {
+		t.Fatalf("expected change event, got %q", recorder.buf.String())
+	}
+}
+
 func TestAlertsRouteProcessesNotifications(t *testing.T) {
 	tmp := t.TempDir()
 	streamersPath := filepath.Join(tmp, "streamers.json")
@@ -193,6 +226,31 @@ type fakeStatusClient struct {
 	statuses map[string]api.LiveStatus
 	calls    int
 }
+
+type sseRecorder struct {
+	headers http.Header
+	buf     bytes.Buffer
+	status  int
+}
+
+func newSSERecorder() *sseRecorder {
+	return &sseRecorder{headers: make(http.Header)}
+}
+
+func (r *sseRecorder) Header() http.Header { return r.headers }
+
+func (r *sseRecorder) Write(b []byte) (int, error) {
+	if r.status == 0 {
+		r.status = http.StatusOK
+	}
+	return r.buf.Write(b)
+}
+
+func (r *sseRecorder) WriteHeader(statusCode int) {
+	r.status = statusCode
+}
+
+func (r *sseRecorder) Flush() {}
 
 func (f *fakeStatusClient) LiveStatus(ctx context.Context, videoID string) (api.LiveStatus, error) {
 	f.calls++

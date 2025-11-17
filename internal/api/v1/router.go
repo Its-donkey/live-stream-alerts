@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"live-stream-alerts/internal/logging"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
@@ -47,6 +48,11 @@ func NewRouter(opts Options) http.Handler {
 		Logger: logger,
 	}))
 	mux.Handle("/api/streamers", streamersHandler)
+	mux.Handle("/api/streamers/watch", streamersWatchHandler(streamersWatchOptions{
+		FilePath:     streamersPath,
+		Logger:       logger,
+		PollInterval: time.Second,
+	}))
 
 	alertsOpts := opts.AlertNotifications
 	if alertsOpts.Logger == nil {

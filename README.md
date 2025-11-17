@@ -35,6 +35,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 | POST   | `/api/youtube/unsubscribe`   | Issues unsubscribe calls to YouTube's hub so channels stop sending alerts. |
 | POST   | `/api/youtube/channel`       | Resolves a YouTube `@handle` into its canonical channel ID. |
 | GET    | `/api/streamers`             | Returns every stored streamer record. |
+| GET    | `/api/streamers/watch`       | Streams server-sent events whenever `streamers.json` changes. |
 | POST   | `/api/streamers`             | Persists streamer metadata to `data/streamers.json`. |
 | PATCH  | `/api/streamers`             | Updates the alias/description/languages of an existing streamer. |
 | DELETE | `/api/streamers`             | Removes a stored streamer record. |
@@ -80,6 +81,11 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 - **Purpose:** Lists every persisted streamer record so the UI or tooling can inspect the latest state.
 - **Response:** `200 OK` with `{ "streamers": [ ...records... ] }`.
 - **Notes:** Records mirror the schema in `schema/streamers.schema.json`, including platform metadata and server-managed timestamps.
+
+### GET `/api/streamers/watch`
+- **Purpose:** Emits Server-Sent Events whenever `data/streamers.json` changes so browser clients can reload automatically.
+- **Response:** `text/event-stream` payload with an initial `ready` event followed by `change` events containing the file's modification timestamp.
+- **Usage:** Connect via EventSource in the browser and call `location.reload()` when a `change` event is received.
 
 ### POST `/api/streamers`
 - **Purpose:** Appends a streamer record to `data/streamers.json` using the schema in `schema/streamers.schema.json`.
