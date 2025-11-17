@@ -48,7 +48,7 @@ func TestHandleSubscriptionConfirmationSuccess(t *testing.T) {
 	values.Set("hub.lease_seconds", "60")
 	values.Set("hub.mode", "subscribe")
 
-	req := httptest.NewRequest(http.MethodGet, "/alert?"+values.Encode(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/alerts?"+values.Encode(), nil)
 	rr := httptest.NewRecorder()
 
 	handled := HandleSubscriptionConfirmation(rr, req, SubscriptionConfirmationOptions{StreamersPath: path, Logger: &memoryLogger{}})
@@ -105,7 +105,7 @@ func TestHandleSubscriptionConfirmationSkipsLeaseForUnsubscribe(t *testing.T) {
 	values.Set("hub.topic", topic)
 	values.Set("hub.mode", "unsubscribe")
 
-	req := httptest.NewRequest(http.MethodGet, "/alert?"+values.Encode(), nil)
+	req := httptest.NewRequest(http.MethodGet, "/alerts?"+values.Encode(), nil)
 	rr := httptest.NewRecorder()
 
 	handled := HandleSubscriptionConfirmation(rr, req, SubscriptionConfirmationOptions{StreamersPath: path, Logger: &memoryLogger{}})
@@ -140,7 +140,7 @@ func TestHandleSubscriptionConfirmationValidatesRequests(t *testing.T) {
 		t.Fatalf("expected non-alert path to be ignored")
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/alert", nil)
+	req = httptest.NewRequest(http.MethodGet, "/alerts", nil)
 	rr = httptest.NewRecorder()
 	if !HandleSubscriptionConfirmation(rr, req, SubscriptionConfirmationOptions{}) {
 		t.Fatalf("expected request to be handled")
@@ -151,7 +151,7 @@ func TestHandleSubscriptionConfirmationValidatesRequests(t *testing.T) {
 }
 
 func TestHandleSubscriptionConfirmationMissingExpectation(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/alert?hub.challenge=a&hub.verify_token=missing", nil)
+	req := httptest.NewRequest(http.MethodGet, "/alerts?hub.challenge=a&hub.verify_token=missing", nil)
 	rr := httptest.NewRecorder()
 	handled := HandleSubscriptionConfirmation(rr, req, SubscriptionConfirmationOptions{})
 	if !handled {

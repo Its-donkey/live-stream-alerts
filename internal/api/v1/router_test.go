@@ -97,6 +97,8 @@ func TestAlertsRouteHandlesVerification(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/alerts?hub.mode=subscribe&hub.topic=https://example.com/feed&hub.challenge=abc&hub.lease_seconds=864000&hub.verify_token="+token, nil)
+	req.Header.Set("User-Agent", "FeedFetcher-Google")
+	req.Header.Set("From", "googlebot(at)googlebot.com")
 	rr := httptest.NewRecorder()
 
 	router.ServeHTTP(rr, req)

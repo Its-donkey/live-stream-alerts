@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"live-stream-alerts/config"
@@ -42,57 +43,102 @@ func newSubscriptionHandler(mode, logLabel string, opts SubscriptionHandlerOptio
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.Header().Set("Allow", http.MethodPost)
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		if !isPostRequest(r) {
+			writeMethodNotAllowed(w, http.MethodPost)
 			return
 		}
-
 		defer r.Body.Close()
-		var req subscriptions.YouTubeRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON body", http.StatusBadRequest)
+
+		req, decodeResult := decodeSubscriptionRequest(r)
+		if !decodeResult.IsValid {
+			http.Error(w, decodeResult.Error, http.StatusBadRequest)
 			return
 		}
 
-		req.Mode = mode
-		if req.LeaseSeconds <= 0 && mode == "subscribe" {
-			req.LeaseSeconds = config.YT.LeaseSeconds
-		}
+		applySubscriptionDefaults(&req, mode)
 
 		resp, body, finalReq, err := subscriptions.SubscribeYouTube(r.Context(), client, opts.Logger, req)
-		if err != nil {
-			if opts.Logger != nil {
-				opts.Logger.Printf("%s hub response: %v", logLabel, err)
-			}
-			if resp == nil {
-				status := http.StatusBadGateway
-				if errors.Is(err, subscriptions.ErrValidation) {
-					status = http.StatusBadRequest
-				}
-				http.Error(w, err.Error(), status)
-				return
-			}
+		if handled := handleSubscriptionError(w, resp, err, logLabel, opts.Logger); handled {
+			return
 		}
 		if resp == nil {
 			http.Error(w, "hub request failed", http.StatusBadGateway)
 			return
 		}
 
-		if ct := resp.Header.Get("Content-Type"); ct != "" {
-			w.Header().Set("Content-Type", ct)
-		} else {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		}
-		w.WriteHeader(resp.StatusCode)
-		if len(body) > 0 {
-			_, _ = w.Write(body)
-			return
-		}
-		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			_, _ = io.WriteString(w, resp.Status)
-		}
-
-		websub.RecordSubscriptionResult(finalReq.VerifyToken, "", req.Topic, resp.Status, string(body))
+		writeSubscriptionResponse(w, resp, body)
+		recordSubscriptionResult(finalReq, req, resp, body)
 	})
+}
+
+func decodeSubscriptionRequest(r *http.Request) (subscriptions.YouTubeRequest, ValidationResult) {
+	var req subscriptions.YouTubeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return req, ValidationResult{IsValid: false, Error: "invalid JSON body"}
+	}
+
+	req.Topic = strings.TrimSpace(req.Topic)
+	if req.Topic == "" {
+		return req, ValidationResult{IsValid: false, Error: "topic is required"}
+	}
+
+	return req, ValidationResult{IsValid: true}
+}
+
+func applySubscriptionDefaults(req *subscriptions.YouTubeRequest, mode string) {
+	req.Mode = mode
+	if strings.EqualFold(mode, "subscribe") && req.LeaseSeconds <= 0 {
+		req.LeaseSeconds = config.YT.LeaseSeconds
+	}
+}
+
+func handleSubscriptionError(w http.ResponseWriter, resp *http.Response, err error, logLabel string, logger logging.Logger) bool {
+	if err == nil {
+		return false
+	}
+	if logger != nil {
+		logger.Printf("%s hub response: %v", logLabel, err)
+	}
+	if resp == nil {
+		status := http.StatusBadGateway
+		if errors.Is(err, subscriptions.ErrValidation) {
+			status = http.StatusBadRequest
+		}
+		http.Error(w, err.Error(), status)
+		return true
+	}
+	return false
+}
+
+func writeSubscriptionResponse(w http.ResponseWriter, resp *http.Response, body []byte) {
+	if ct := resp.Header.Get("Content-Type"); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	} else {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	}
+	w.WriteHeader(resp.StatusCode)
+	if len(body) > 0 {
+		_, _ = w.Write(body)
+		return
+	}
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		_, _ = io.WriteString(w, resp.Status)
+	}
+}
+
+func recordSubscriptionResult(finalReq, originalReq subscriptions.YouTubeRequest, resp *http.Response, body []byte) {
+	token := strings.TrimSpace(finalReq.VerifyToken)
+	if token == "" {
+		token = strings.TrimSpace(originalReq.VerifyToken)
+	}
+	if token == "" {
+		return
+	}
+
+	status := ""
+	if resp != nil {
+		status = resp.Status
+	}
+
+	websub.RecordSubscriptionResult(token, "", originalReq.Topic, status, string(body))
 }

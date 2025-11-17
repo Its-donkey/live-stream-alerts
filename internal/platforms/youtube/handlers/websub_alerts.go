@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -20,147 +21,217 @@ type SubscriptionConfirmationOptions struct {
 	StreamersPath string
 }
 
+type hubRequest struct {
+	Challenge     string
+	VerifyToken   string
+	Topic         string
+	Mode          string
+	LeaseProvided bool
+	LeaseValue    int
+}
+
+func (req hubRequest) IsUnsubscribe() bool {
+	return strings.EqualFold(req.Mode, "unsubscribe")
+}
+
 // HandleSubscriptionConfirmation processes YouTube PubSubHubbub GET verification requests.
 // It returns true when the request has been handled (regardless of success).
 func HandleSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, opts SubscriptionConfirmationOptions) bool {
 	logger := opts.Logger
-	if r.Method != http.MethodGet {
-		return false
-	}
-	switch r.URL.Path {
-	case "/alert", "/alerts":
-	default:
+	if !isAlertsVerificationRequest(r) {
 		return false
 	}
 
 	query := r.URL.Query()
-	challenge := query.Get("hub.challenge")
-	if challenge == "" {
-		http.Error(w, "missing hub.challenge", http.StatusBadRequest)
-		return true
-	}
-	verifyToken := strings.TrimSpace(query.Get("hub.verify_token"))
-	if verifyToken == "" {
-		http.Error(w, "missing hub.verify_token", http.StatusBadRequest)
+	req, baseValidation := parseHubRequest(query)
+	if !baseValidation.IsValid {
+		http.Error(w, baseValidation.Error, http.StatusBadRequest)
 		return true
 	}
 
-	exp, ok := websub.LookupExpectation(verifyToken)
+	exp, ok := websub.LookupExpectation(req.VerifyToken)
 	if !ok {
 		http.Error(w, "unknown verification token", http.StatusBadRequest)
 		return true
 	}
 
-	topic := strings.TrimSpace(query.Get("hub.topic"))
-	if exp.Topic != "" && topic != exp.Topic {
-		http.Error(w, "hub.topic mismatch", http.StatusBadRequest)
+	expectationValidation := validateAgainstExpectation(req, exp)
+	if !expectationValidation.IsValid {
+		http.Error(w, expectationValidation.Error, http.StatusBadRequest)
 		return true
+	}
+
+	logHubRequest(logger, r, query, req)
+
+	prepareHubResponse(w, req.Challenge)
+	logPlannedResponse(logger, w, req.Challenge)
+
+	verifiedAt := time.Now().UTC()
+	channelID := updateLeaseIfNeeded(req, exp, opts.StreamersPath, verifiedAt, logger)
+
+	finalExp := finalizeExpectation(req.VerifyToken, exp)
+
+	writeChallengeResponse(w, req.Challenge)
+
+	logSubscriptionResult(logger, finalExp, exp, channelID, req.Topic, req.IsUnsubscribe())
+
+	return true
+}
+
+func isAlertsVerificationRequest(r *http.Request) bool {
+	return r.Method == http.MethodGet && r.URL.Path == "/alerts"
+}
+
+func parseHubRequest(query url.Values) (hubRequest, ValidationResult) {
+	req := hubRequest{
+		Challenge:   query.Get("hub.challenge"),
+		VerifyToken: strings.TrimSpace(query.Get("hub.verify_token")),
+		Topic:       strings.TrimSpace(query.Get("hub.topic")),
+		Mode:        strings.TrimSpace(query.Get("hub.mode")),
+	}
+
+	if req.Challenge == "" {
+		return req, ValidationResult{IsValid: false, Error: "missing hub.challenge"}
+	}
+	if req.VerifyToken == "" {
+		return req, ValidationResult{IsValid: false, Error: "missing hub.verify_token"}
 	}
 
 	leaseParam := strings.TrimSpace(query.Get("hub.lease_seconds"))
-	leaseValue := 0
-	leaseProvided := leaseParam != ""
-	if leaseProvided {
+	if leaseParam != "" {
 		parsedLease, err := strconv.Atoi(leaseParam)
 		if err != nil {
-			http.Error(w, "invalid hub.lease_seconds", http.StatusBadRequest)
-			return true
+			return req, ValidationResult{IsValid: false, Error: "invalid hub.lease_seconds"}
 		}
-		leaseValue = parsedLease
+		req.LeaseProvided = true
+		req.LeaseValue = parsedLease
 	}
+
+	return req, ValidationResult{IsValid: true}
+}
+
+func validateAgainstExpectation(req hubRequest, exp websub.Expectation) ValidationResult {
+	topic := req.Topic
+	if exp.Topic != "" && topic != exp.Topic {
+		return ValidationResult{IsValid: false, Error: "hub.topic mismatch"}
+	}
+
 	expIsUnsubscribe := strings.EqualFold(exp.Mode, "unsubscribe")
-	if leaseProvided && exp.LeaseSeconds > 0 && leaseValue != exp.LeaseSeconds && !expIsUnsubscribe {
-		http.Error(w, "hub.lease_seconds mismatch", http.StatusBadRequest)
-		return true
+	leaseProvided := req.LeaseProvided
+	if leaseProvided && exp.LeaseSeconds > 0 && req.LeaseValue != exp.LeaseSeconds && !expIsUnsubscribe {
+		return ValidationResult{IsValid: false, Error: "hub.lease_seconds mismatch"}
 	}
 
-	mode := strings.TrimSpace(query.Get("hub.mode"))
-	isUnsubscribe := strings.EqualFold(mode, "unsubscribe")
-	if exp.Mode != "" && !strings.EqualFold(mode, exp.Mode) {
-		http.Error(w, "hub.mode mismatch", http.StatusBadRequest)
-		return true
+	if exp.Mode != "" && !strings.EqualFold(req.Mode, exp.Mode) {
+		return ValidationResult{IsValid: false, Error: "hub.mode mismatch"}
 	}
 
-	if logger != nil {
-		logger.Printf(
-			"Responding to hub challenge: mode=%s topic=%s lease=%s token=%s body=%q",
-			mode,
-			query.Get("hub.topic"),
-			query.Get("hub.lease_seconds"),
-			query.Get("hub.verify_token"),
-			challenge,
-		)
-		if dump, err := httputil.DumpRequest(r, true); err == nil {
-			logger.Printf("Raw verification request:\n%s", dump)
-		} else {
-			logger.Printf("Failed to dump verification request: %v", err)
-		}
+	return ValidationResult{IsValid: true}
+}
+
+func logHubRequest(logger logging.Logger, r *http.Request, query url.Values, req hubRequest) {
+	if logger == nil {
+		return
 	}
 
+	logger.Printf(
+		"Responding to hub challenge: mode=%s topic=%s lease=%s token=%s body=%q",
+		req.Mode,
+		query.Get("hub.topic"),
+		query.Get("hub.lease_seconds"),
+		query.Get("hub.verify_token"),
+		req.Challenge,
+	)
+	if dump, err := httputil.DumpRequest(r, true); err == nil {
+		logger.Printf("Raw verification request:\n%s", dump)
+	} else {
+		logger.Printf("Failed to dump verification request: %v", err)
+	}
+}
+
+func prepareHubResponse(w http.ResponseWriter, challenge string) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Content-Length", strconv.Itoa(len(challenge)))
+}
 
-	if logger != nil {
-		var responseDump strings.Builder
-		responseDump.WriteString("HTTP/1.1 200 OK\r\n")
-		for name, values := range w.Header() {
-			for _, value := range values {
-				responseDump.WriteString(name)
-				responseDump.WriteString(": ")
-				responseDump.WriteString(value)
-				responseDump.WriteString("\r\n")
-			}
-		}
-		responseDump.WriteString("\r\n")
-		responseDump.WriteString(challenge)
-		logger.Printf("Planned hub response:\n%s", responseDump.String())
+func logPlannedResponse(logger logging.Logger, w http.ResponseWriter, challenge string) {
+	if logger == nil {
+		return
 	}
 
-	verifiedAt := time.Now().UTC()
+	var responseDump strings.Builder
+	responseDump.WriteString("HTTP/1.1 200 OK\r\n")
+	for name, values := range w.Header() {
+		for _, value := range values {
+			responseDump.WriteString(name)
+			responseDump.WriteString(": ")
+			responseDump.WriteString(value)
+			responseDump.WriteString("\r\n")
+		}
+	}
+	responseDump.WriteString("\r\n")
+	responseDump.WriteString(challenge)
+	logger.Printf("Planned hub response:\n%s", responseDump.String())
+}
+
+func updateLeaseIfNeeded(req hubRequest, exp websub.Expectation, streamersPath string, verifiedAt time.Time, logger logging.Logger) string {
 	channelID := exp.ChannelID
 	if channelID == "" {
-		channelID = websub.ExtractChannelID(topic)
+		channelID = websub.ExtractChannelID(req.Topic)
 	}
-	if channelID != "" && !isUnsubscribe && leaseProvided {
-		if err := youtubesub.RecordLease(opts.StreamersPath, channelID, verifiedAt); err != nil && logger != nil {
+
+	if channelID != "" && !req.IsUnsubscribe() && req.LeaseProvided {
+		if err := youtubesub.RecordLease(streamersPath, channelID, verifiedAt); err != nil && logger != nil {
 			logger.Printf("failed to record hub lease for %s: %v", channelID, err)
 		}
 	}
 
+	return channelID
+}
+
+func finalizeExpectation(verifyToken string, exp websub.Expectation) websub.Expectation {
 	finalExp := exp
 	if consumed, ok := websub.ConsumeExpectation(verifyToken); ok {
 		finalExp = consumed
 	}
+	return finalExp
+}
+
+func writeChallengeResponse(w http.ResponseWriter, challenge string) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.WriteString(w, challenge)
+}
 
-	if logger != nil {
-		if finalExp.HubStatus != "" {
-			logger.Printf("YouTube hub response status: %s, body: %s", finalExp.HubStatus, finalExp.HubBody)
-		}
-		alias := strings.TrimSpace(finalExp.Alias)
-		if alias == "" {
-			alias = strings.TrimSpace(exp.Alias)
-		}
-		if alias == "" {
-			alias = channelID
-		}
-		if alias == "" {
-			alias = "channel"
-		}
-		displayTopic := topic
-		if displayTopic == "" {
-			displayTopic = finalExp.Topic
-		}
-		if displayTopic == "" {
-			displayTopic = exp.Topic
-		}
-		if isUnsubscribe {
-			logger.Printf("YouTube alerts unsubscribed for %s (%s)", alias, displayTopic)
-		} else {
-			logger.Printf("YouTube alerts subscribed for %s (%s)", alias, displayTopic)
-		}
+func logSubscriptionResult(logger logging.Logger, finalExp, originalExp websub.Expectation, channelID, topic string, isUnsubscribe bool) {
+	if logger == nil {
+		return
 	}
 
-	return true
+	if finalExp.HubStatus != "" {
+		logger.Printf("YouTube hub response status: %s, body: %s", finalExp.HubStatus, finalExp.HubBody)
+	}
+	alias := strings.TrimSpace(finalExp.Alias)
+	if alias == "" {
+		alias = strings.TrimSpace(originalExp.Alias)
+	}
+	if alias == "" {
+		alias = channelID
+	}
+	if alias == "" {
+		alias = "channel"
+	}
+
+	displayTopic := topic
+	if displayTopic == "" {
+		displayTopic = finalExp.Topic
+	}
+	if displayTopic == "" {
+		displayTopic = originalExp.Topic
+	}
+
+	if isUnsubscribe {
+		logger.Printf("YouTube alerts unsubscribed for %s (%s)", alias, displayTopic)
+	} else {
+		logger.Printf("YouTube alerts subscribed for %s (%s)", alias, displayTopic)
+	}
 }

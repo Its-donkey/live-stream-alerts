@@ -20,6 +20,7 @@
 - Stubbed platform folders (`internal/platforms/{youtube,facebook,twitch}`) plus shared logging utilities to support future providers.
 - Added a root `.gitignore` to drop editor/OS cruft, `cmd/alertserver/out.bin`, and other generated artifacts (including generated WebAssembly binaries).
 - Added a root `README.md` with setup instructions and a canonical list of every HTTP endpoint so future additions stay documented.
+- Rotated `data/alertserver.log` into timestamped archives under `data/logs/` on startup so each run writes to a clean file without losing history.
 ### Changed
 - Allowed `streamer.firstName`, `streamer.lastName`, and `streamer.email` fields to be blank in the JSON schema so optional contact details no longer trigger validation errors.
 - Moved the HTTP router under `internal/api/v1` and updated docs/CLI tooling so future endpoints live under their API versioned package.
@@ -49,6 +50,9 @@
 - Added explicit logging after sending the hub challenge reply so the status/body echoed back to YouTube are captured.
 - Made the YouTube WebSub defaults configurable through environment variables or CLI flags so deployments are not tied to baked-in hub/callback values.
 - DELETE `/api/streamers` now unsubscribes the corresponding YouTube WebSub feed before removing the record so PubSubHubbub callbacks stop immediately.
+- Restricted `/alerts` to GET requests from FeedFetcher-Google, logging the raw verification data and rejecting suspicious traffic instead of processing every request blindly.
+- Hardened the YouTube HTTP handlers by sharing JSON/body validation, trimming whitespace, and surfacing meaningful `400` responses whenever subscribe/unsubscribe, metadata, or channel lookup payloads are malformed.
+- WebSub subscriptions now dump the full hub response and log when Google accepts a request so operators can trace every step from the API proxy through confirmation.
 ### Fixed
 - Persist `streamer.alias` when creating records and require it as the primary identifier so requests without names no longer lose the alias field.
 - Removed references to the deprecated `/api/youtube/new/subscribe` alias so the README only lists active endpoints.

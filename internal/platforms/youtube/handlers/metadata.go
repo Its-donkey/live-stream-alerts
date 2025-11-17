@@ -39,43 +39,67 @@ func NewMetadataHandler(opts MetadataHandlerOptions) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.Header().Set("Allow", http.MethodPost)
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		if !isPostRequest(r) {
+			writeMethodNotAllowed(w, http.MethodPost)
 			return
 		}
-
 		defer r.Body.Close()
-		var req MetadataRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON body", http.StatusBadRequest)
+
+		req, validation := decodeMetadataRequest(r)
+		if !validation.IsValid {
+			http.Error(w, validation.Error, http.StatusBadRequest)
 			return
 		}
 
-		target := strings.TrimSpace(req.URL)
-		parsed, err := url.Parse(target)
-		if err != nil || parsed.Scheme == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-			http.Error(w, "url must be http or https", http.StatusBadRequest)
+		targetURL, targetValidation := normaliseMetadataURL(req.URL)
+		if !targetValidation.IsValid {
+			http.Error(w, targetValidation.Error, http.StatusBadRequest)
 			return
 		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 
-		desc, title, handle, channelID, err := fetchMetadata(ctx, client, parsed.String())
+		desc, title, handle, channelID, err := fetchMetadata(ctx, client, targetURL)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_ = json.NewEncoder(w).Encode(MetadataResponse{
+		writeMetadataResponse(w, MetadataResponse{
 			Description: desc,
 			Title:       title,
 			Handle:      handle,
 			ChannelID:   channelID,
 		})
 	})
+}
+
+func decodeMetadataRequest(r *http.Request) (MetadataRequest, ValidationResult) {
+	var req MetadataRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return req, ValidationResult{IsValid: false, Error: "invalid JSON body"}
+	}
+	return req, ValidationResult{IsValid: true}
+}
+
+func normaliseMetadataURL(raw string) (string, ValidationResult) {
+	target := strings.TrimSpace(raw)
+	if target == "" {
+		return "", ValidationResult{IsValid: false, Error: "url is required"}
+	}
+
+	parsed, err := url.Parse(target)
+	if err != nil || parsed.Scheme == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", ValidationResult{IsValid: false, Error: "url must be http or https"}
+	}
+
+	return parsed.String(), ValidationResult{IsValid: true}
+}
+
+func writeMetadataResponse(w http.ResponseWriter, resp MetadataResponse) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func fetchMetadata(ctx context.Context, client *http.Client, target string) (string, string, string, string, error) {
