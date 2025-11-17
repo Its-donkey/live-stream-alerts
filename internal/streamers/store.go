@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +29,7 @@ type File struct {
 type Record struct {
 	Streamer  Streamer  `json:"streamer"`
 	Platforms Platforms `json:"platforms"`
+	Status    *Status   `json:"status,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -50,6 +52,36 @@ type Platforms struct {
 	YouTube  *YouTubePlatform  `json:"youtube,omitempty"`
 	Facebook *FacebookPlatform `json:"facebook,omitempty"`
 	Twitch   *TwitchPlatform   `json:"twitch,omitempty"`
+}
+
+// Status tracks live information for each platform.
+type Status struct {
+	Live      bool            `json:"live"`
+	Platforms []string        `json:"platforms,omitempty"`
+	YouTube   *YouTubeStatus  `json:"youtube,omitempty"`
+	Twitch    *TwitchStatus   `json:"twitch,omitempty"`
+	Facebook  *FacebookStatus `json:"facebook,omitempty"`
+}
+
+// YouTubeStatus stores the current live metadata for YouTube.
+type YouTubeStatus struct {
+	Live      bool      `json:"live"`
+	VideoID   string    `json:"videoId,omitempty"`
+	StartedAt time.Time `json:"startedAt,omitempty"`
+}
+
+// TwitchStatus stores Twitch live metadata.
+type TwitchStatus struct {
+	Live      bool      `json:"live"`
+	StreamID  string    `json:"streamId,omitempty"`
+	StartedAt time.Time `json:"startedAt,omitempty"`
+}
+
+// FacebookStatus stores Facebook Live metadata.
+type FacebookStatus struct {
+	Live      bool      `json:"live"`
+	VideoID   string    `json:"videoId,omitempty"`
+	StartedAt time.Time `json:"startedAt,omitempty"`
 }
 
 // YouTubePlatform stores YouTube-specific metadata.
@@ -280,6 +312,145 @@ func Get(path, streamerID string) (Record, error) {
 		}
 	}
 	return Record{}, fmt.Errorf("%w: %s", ErrStreamerNotFound, streamerID)
+}
+
+// SetYouTubeLive marks the streamer associated with the provided channel ID as live.
+func SetYouTubeLive(path, channelID, videoID string, startedAt time.Time) (Record, error) {
+	return updateYouTubeStatus(path, channelID, func(status *Status) {
+		if status.YouTube == nil {
+			status.YouTube = &YouTubeStatus{}
+		}
+		status.YouTube.Live = true
+		status.YouTube.VideoID = videoID
+		if !startedAt.IsZero() {
+			status.YouTube.StartedAt = startedAt
+		} else {
+			status.YouTube.StartedAt = time.Time{}
+		}
+		status.Platforms = addPlatform(status.Platforms, platformYouTube)
+		status.Live = true
+	})
+}
+
+// ClearYouTubeLive marks the YouTube platform as offline for the matching channel ID.
+func ClearYouTubeLive(path, channelID string) (Record, error) {
+	return updateYouTubeStatus(path, channelID, func(status *Status) {
+		if status.YouTube == nil {
+			status.YouTube = &YouTubeStatus{}
+		}
+		status.YouTube.Live = false
+		status.YouTube.VideoID = ""
+		status.YouTube.StartedAt = time.Time{}
+		status.Platforms = removePlatform(status.Platforms, platformYouTube)
+	})
+}
+
+const platformYouTube = "youtube"
+
+func updateYouTubeStatus(path, channelID string, updateFn func(*Status)) (Record, error) {
+	if path == "" {
+		return Record{}, errors.New("streamers file path is required")
+	}
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" {
+		return Record{}, errors.New("youtube channel id is required")
+	}
+	var updated Record
+	err := UpdateFile(path, func(file *File) error {
+		for i := range file.Records {
+			yt := file.Records[i].Platforms.YouTube
+			if !channelMatches(yt, channelID) {
+				continue
+			}
+			if file.Records[i].Status == nil {
+				file.Records[i].Status = &Status{}
+			}
+			updateFn(file.Records[i].Status)
+			refreshLiveFlag(file.Records[i].Status)
+			file.Records[i].UpdatedAt = time.Now().UTC()
+			updated = file.Records[i]
+			return nil
+		}
+		return fmt.Errorf("%w: %s", ErrStreamerNotFound, channelID)
+	})
+	return updated, err
+}
+
+func channelMatches(yt *YouTubePlatform, target string) bool {
+	if yt == nil {
+		return false
+	}
+	stored := strings.TrimSpace(yt.ChannelID)
+	if stored == "" {
+		stored = extractChannelIDFromTopic(yt.Topic)
+	}
+	if stored == "" || target == "" {
+		return false
+	}
+	if strings.EqualFold(stored, target) {
+		return true
+	}
+	return strings.EqualFold(trimChannelPrefix(stored), trimChannelPrefix(target))
+}
+
+func trimChannelPrefix(value string) string {
+	value = strings.TrimSpace(strings.ToUpper(value))
+	return strings.TrimPrefix(value, "UC")
+}
+
+func extractChannelIDFromTopic(topic string) string {
+	if topic == "" {
+		return ""
+	}
+	u, err := url.Parse(topic)
+	if err != nil {
+		return ""
+	}
+	return u.Query().Get("channel_id")
+}
+
+func addPlatform(platforms []string, platform string) []string {
+	platform = strings.ToLower(platform)
+	for _, existing := range platforms {
+		if existing == platform {
+			return platforms
+		}
+	}
+	return append(platforms, platform)
+}
+
+func removePlatform(platforms []string, platform string) []string {
+	platform = strings.ToLower(platform)
+	for i, existing := range platforms {
+		if existing == platform {
+			return append(platforms[:i], platforms[i+1:]...)
+		}
+	}
+	return platforms
+}
+
+func refreshLiveFlag(status *Status) {
+	if status == nil {
+		return
+	}
+	status.Live = len(status.Platforms) > 0
+	if status.Live {
+		return
+	}
+	if status.YouTube != nil && status.YouTube.Live {
+		status.Platforms = addPlatform(status.Platforms, platformYouTube)
+		status.Live = true
+		return
+	}
+	if status.Twitch != nil && status.Twitch.Live {
+		status.Platforms = addPlatform(status.Platforms, "twitch")
+		status.Live = true
+		return
+	}
+	if status.Facebook != nil && status.Facebook.Live {
+		status.Platforms = addPlatform(status.Platforms, "facebook")
+		status.Live = true
+	}
 }
 
 func readFile(path string) (File, error) {

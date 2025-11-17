@@ -14,6 +14,7 @@ import (
 	"live-stream-alerts/internal/platforms/youtube/api"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
 	"live-stream-alerts/internal/platforms/youtube/websub"
+	"live-stream-alerts/internal/streamers"
 )
 
 type stubLogger struct {
@@ -134,8 +135,11 @@ func TestAlertsRouteRejectsUnsupportedMethods(t *testing.T) {
 func TestAlertsRouteProcessesNotifications(t *testing.T) {
 	tmp := t.TempDir()
 	streamersPath := filepath.Join(tmp, "streamers.json")
-	if err := os.WriteFile(streamersPath, []byte(`{"$schema":"","streamers":[]}`), 0o644); err != nil {
-		t.Fatalf("write streamers file: %v", err)
+	if _, err := streamers.Append(streamersPath, streamers.Record{
+		Streamer:  streamers.Streamer{Alias: "Test", Email: "test@example.com"},
+		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{ChannelID: "UC123"}},
+	}); err != nil {
+		t.Fatalf("append streamer: %v", err)
 	}
 
 	logger := &stubLogger{}
@@ -172,6 +176,16 @@ func TestAlertsRouteProcessesNotifications(t *testing.T) {
 	}
 	if statusClient.calls != 1 {
 		t.Fatalf("expected live status client to be called once, got %d", statusClient.calls)
+	}
+	records, err := streamers.List(streamersPath)
+	if err != nil {
+		t.Fatalf("list streamers: %v", err)
+	}
+	if records[0].Status == nil || records[0].Status.YouTube == nil || !records[0].Status.YouTube.Live {
+		t.Fatalf("expected youtube status to be live: %+v", records[0].Status)
+	}
+	if records[0].Status.YouTube.VideoID != "abc123" {
+		t.Fatalf("expected video id to be recorded, got %q", records[0].Status.YouTube.VideoID)
 	}
 }
 

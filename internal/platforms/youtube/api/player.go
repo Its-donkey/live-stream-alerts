@@ -77,6 +77,7 @@ type LiveStatus struct {
 	ChannelID         string
 	IsLive            bool
 	IsLiveNow         bool
+	StartedAt         time.Time
 	PlayabilityStatus string
 }
 
@@ -136,6 +137,11 @@ func (c *PlayerClient) LiveStatus(ctx context.Context, videoID string) (LiveStat
 	}
 	if details := decoded.Microformat.PlayerMicroformatRenderer.LiveBroadcastDetails; details != nil {
 		status.IsLiveNow = details.IsLiveNow
+		if ts := strings.TrimSpace(details.StartTimestamp); ts != "" {
+			if parsed, err := time.Parse(time.RFC3339, ts); err == nil {
+				status.StartedAt = parsed
+			}
+		}
 	}
 
 	return status, nil
@@ -153,7 +159,8 @@ type playerResponse struct {
 	Microformat struct {
 		PlayerMicroformatRenderer struct {
 			LiveBroadcastDetails *struct {
-				IsLiveNow bool `json:"isLiveNow"`
+				IsLiveNow      bool   `json:"isLiveNow"`
+				StartTimestamp string `json:"startTimestamp"`
 			} `json:"liveBroadcastDetails"`
 		} `json:"playerMicroformatRenderer"`
 	} `json:"microformat"`

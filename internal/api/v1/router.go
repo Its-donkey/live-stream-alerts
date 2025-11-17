@@ -52,6 +52,9 @@ func NewRouter(opts Options) http.Handler {
 	if alertsOpts.Logger == nil {
 		alertsOpts.Logger = logger
 	}
+	if alertsOpts.StreamersPath == "" {
+		alertsOpts.StreamersPath = streamersPath
+	}
 	mux.Handle("/alerts", handleAlerts(logger, streamersPath, alertsOpts))
 
 	mux.HandleFunc("/api/server/config", func(w http.ResponseWriter, r *http.Request) {

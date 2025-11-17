@@ -20,6 +20,7 @@
 - Stubbed platform folders (`internal/platforms/{youtube,facebook,twitch}`) plus shared logging utilities to support future providers.
 - Added a root `.gitignore` to drop editor/OS cruft, `cmd/alertserver/out.bin`, and other generated artifacts (including generated WebAssembly binaries).
 - Added a root `README.md` with setup instructions and a canonical list of every HTTP endpoint so future additions stay documented.
+- Once a WebSub notification confirms a YouTube livestream is online, persist the streamer’s `status` with the active video ID, start timestamp, and platform list so downstream tooling can display who’s live.
 - Inspect POST `/alerts` WebSub notifications, parse the feed payload, and query YouTube to confirm whether the referenced video is a livestream that's currently online.
 - Rotated `data/alertserver.log` into timestamped archives under `data/logs/` on startup so each run writes to a clean file without losing history.
 ### Changed

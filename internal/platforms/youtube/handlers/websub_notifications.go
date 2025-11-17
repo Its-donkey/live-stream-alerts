@@ -3,22 +3,25 @@ package handlers
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/api"
+	"live-stream-alerts/internal/streamers"
 )
 
 const defaultNotificationLimit = 1 << 20 // 1 MiB
 
 // NotificationOptions configures how WebSub notifications are processed.
 type NotificationOptions struct {
-	Logger       logging.Logger
-	HTTPClient   *http.Client
-	StatusClient LiveStatusClient
-	BodyLimit    int64
+	Logger        logging.Logger
+	HTTPClient    *http.Client
+	StatusClient  LiveStatusClient
+	BodyLimit     int64
+	StreamersPath string
 }
 
 // LiveStatusClient describes the subset of the player API used by notifications.
@@ -70,6 +73,9 @@ func HandleNotification(w http.ResponseWriter, r *http.Request, opts Notificatio
 		}
 		status, err := client.LiveStatus(r.Context(), entry.VideoID)
 		logNotification(opts.Logger, entry, status, err)
+		if err == nil {
+			updateStreamerLiveStatus(opts.StreamersPath, entry, status, opts.Logger)
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -115,6 +121,21 @@ func logNotification(logger logging.Logger, entry notificationEntry, status api.
 		return
 	}
 	logger.Printf("YouTube upload ignored (not live): %s (video=%s)", title, status.VideoID)
+}
+
+func updateStreamerLiveStatus(path string, entry notificationEntry, status api.LiveStatus, logger logging.Logger) {
+	if path == "" || entry.ChannelID == "" {
+		return
+	}
+	var err error
+	if status.IsOnline() {
+		_, err = streamers.SetYouTubeLive(path, entry.ChannelID, entry.VideoID, status.StartedAt)
+	} else {
+		_, err = streamers.ClearYouTubeLive(path, entry.ChannelID)
+	}
+	if err != nil && logger != nil && !errors.Is(err, streamers.ErrStreamerNotFound) {
+		logger.Printf("failed to update live status for channel %s: %v", entry.ChannelID, err)
+	}
 }
 
 type notificationFeed struct {

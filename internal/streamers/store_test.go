@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestAppendAndList(t *testing.T) {
@@ -196,5 +197,69 @@ func TestReadFileError(t *testing.T) {
 	}
 	if _, err := readFile(path); err == nil {
 		t.Fatalf("expected parse error")
+	}
+}
+
+func TestSetYouTubeLiveUpdatesStatus(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "streamers.json")
+	if _, err := Append(path, Record{
+		Streamer:  Streamer{Alias: "Test"},
+		Platforms: Platforms{YouTube: &YouTubePlatform{ChannelID: "UC123"}},
+	}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	started := time.Now().UTC().Truncate(time.Second)
+	updated, err := SetYouTubeLive(path, "UC123", "video1", started)
+	if err != nil {
+		t.Fatalf("set live: %v", err)
+	}
+	if updated.Status == nil || updated.Status.YouTube == nil || !updated.Status.YouTube.Live {
+		t.Fatalf("expected youtube status to be live: %+v", updated.Status)
+	}
+	if updated.Status.YouTube.VideoID != "video1" {
+		t.Fatalf("expected video id to be recorded, got %q", updated.Status.YouTube.VideoID)
+	}
+	if updated.Status.YouTube.StartedAt.IsZero() {
+		t.Fatalf("expected start time to be set")
+	}
+	if !updated.Status.Live {
+		t.Fatalf("expected overall status live")
+	}
+	if len(updated.Status.Platforms) != 1 || updated.Status.Platforms[0] != "youtube" {
+		t.Fatalf("expected platforms to include youtube, got %v", updated.Status.Platforms)
+	}
+}
+
+func TestClearYouTubeLiveResetsStatus(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "streamers.json")
+	if _, err := Append(path, Record{
+		Streamer:  Streamer{Alias: "Test"},
+		Platforms: Platforms{YouTube: &YouTubePlatform{ChannelID: "UC555"}},
+	}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if _, err := SetYouTubeLive(path, "UC555", "video-live", time.Now()); err != nil {
+		t.Fatalf("set live: %v", err)
+	}
+	updated, err := ClearYouTubeLive(path, "UC555")
+	if err != nil {
+		t.Fatalf("clear live: %v", err)
+	}
+	if updated.Status == nil || updated.Status.YouTube == nil {
+		t.Fatalf("expected youtube status struct")
+	}
+	if updated.Status.YouTube.Live {
+		t.Fatalf("expected youtube live=false")
+	}
+	if updated.Status.YouTube.VideoID != "" {
+		t.Fatalf("expected video id cleared, got %q", updated.Status.YouTube.VideoID)
+	}
+	if updated.Status.Live {
+		t.Fatalf("expected overall status to be offline")
+	}
+	if len(updated.Status.Platforms) != 0 {
+		t.Fatalf("expected platforms to be empty, got %v", updated.Status.Platforms)
 	}
 }
