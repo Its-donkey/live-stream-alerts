@@ -3,6 +3,7 @@ package v1
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"live-stream-alerts/internal/logging"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
@@ -46,9 +47,7 @@ func NewRouter(opts Options) http.Handler {
 	}))
 	mux.Handle("/api/streamers", streamersHandler)
 
-	alertsHandler := handleAlerts(logger, streamersPath)
-	mux.Handle("/alerts", alertsHandler)
-	mux.Handle("/alert", alertsHandler)
+	mux.Handle("/alerts", handleAlerts(logger, streamersPath))
 
 	mux.HandleFunc("/api/server/config", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, opts.RuntimeInfo)
@@ -70,15 +69,59 @@ func respondJSON(w http.ResponseWriter, payload any) {
 	}
 }
 
+// handleAlerts returns an HTTP handler that only treats likely Google/YouTube
+// verification requests as WebSub subscription confirmations.
 func handleAlerts(logger logging.Logger, streamersPath string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if youtubehandlers.HandleSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
-			Logger:        logger,
-			StreamersPath: streamersPath,
-		}) {
+		// Basic method and path sanity
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+
+		if r.URL.Path != "/alerts" {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Extract headers used to judge whether this looks like Google/YouTube.
+		userAgent := r.Header.Get("User-Agent")
+		from := r.Header.Get("From")
+		forwardedFor := r.Header.Get("X-Forwarded-For")
+
+		platform := alertPlatform(userAgent, from)
+
+		if platform == "youtube" {
+			// Let the YouTube subscription confirmation handler do the real work:
+			// validate verify_token, challenge, topic, etc.
+			if youtubehandlers.HandleSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
+				Logger:        logger,
+				StreamersPath: streamersPath,
+			}) {
+				return
+			}
+
+			// If it got this far, the request looked like Google but didn't pass
+			// your internal validation (e.g. bad verify_token).
+			http.Error(w, "invalid subscription confirmation", http.StatusBadRequest)
+			return
+		}
+
+		// Anything that doesn't look like a genuine Google/YouTube verification
+		// falls through to here.
+		logger.Printf("suspicious /alerts request: platform=%q ua=%q from=%q xff=%q", platform, userAgent, from, forwardedFor)
+
 		w.Header().Set("Allow", http.MethodGet)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	})
 }
+
+func alertPlatform(userAgent, from string) string {
+	if strings.HasPrefix(userAgent, "FeedFetcher-Google") && from == "googlebot(at)googlebot.com" {
+		return "youtube"
+	}
+	return ""
+}
+
+

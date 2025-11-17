@@ -130,6 +130,22 @@ func ManageSubscription(ctx context.Context, record streamers.Record, opts Optio
 		return fmt.Errorf("subscribe youtube alerts: %w", err)
 	}
 
+	if logger != nil && resp != nil {
+		alias := strings.TrimSpace(record.Streamer.Alias)
+		if alias == "" {
+			alias = record.Streamer.ID
+		}
+		logger.Printf(
+			"YouTube hub accepted %s for %s (topic=%s, callback=%s, status=%s). Awaiting hub challenge with token %s.",
+			mode,
+			alias,
+			finalReq.Topic,
+			finalReq.Callback,
+			resp.Status,
+			finalReq.VerifyToken,
+		)
+	}
+
 	websub.RecordSubscriptionResult(
 		finalReq.VerifyToken,
 		record.Streamer.Alias,

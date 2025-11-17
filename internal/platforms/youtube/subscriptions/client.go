@@ -2,6 +2,7 @@
 package subscriptions
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -161,6 +162,14 @@ func SubscribeYouTube(
 	if readErr != nil {
 		return resp, nil, req, fmt.Errorf("read hub response: %w", readErr)
 	}
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+
+	if dump, err := httputil.DumpResponse(resp, true); err == nil {
+		logger.Printf("Inbound WebSub response:\n%s", dump)
+	} else {
+		logger.Printf("Failed to dump WebSub response: %v", err)
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(body))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return resp, body, req, fmt.Errorf("hub returned non-2xx: %s", resp.Status)
 	}

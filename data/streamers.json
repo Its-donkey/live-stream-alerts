@@ -3,221 +3,37 @@
   "streamers": [
     {
       "streamer": {
-        "id": "LinusTechTips",
-        "alias": "Linus Tech Tips",
-        "firstName": "Linus",
-        "lastName": "Sebastian",
-        "email": "linus@example.com",
-        "city": "Vancouver",
-        "country": "Canada"
+        "id": "JordanMatter",
+        "alias": "Jordan Matter",
+        "description": "My daughter has taken over my channel!",
+        "firstName": "",
+        "lastName": "",
+        "email": "",
+        "languages": [
+          "English"
+        ]
       },
       "platforms": {
         "youtube": {
-          "handle": "@LinusTechTips",
-          "channelId": "UCXuqSBlHAE6Xw-yeJA0Tunw",
-          "hubSecret": "redacted",
-          "hubLeaseRenewalDue": "2025-11-17T10:36:29Z"
+          "handle": "@jordanmatter",
+          "channelId": "UCI3szCgzGTRBTF_2dVaTZdQ",
+          "hubSecret": "GmtXT02Gnu7-R3iVcAIBUc1pOsOZkfwQ",
+          "hubLeaseRenewalDue": "2025-11-16T07:32:44Z",
+          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCI3szCgzGTRBTF_2dVaTZdQ",
+          "callbackUrl": "https://sharpen.live/alerts",
+          "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
+          "verifyMode": "async",
+          "leaseSeconds": 864000
         }
       },
-      "createdAt": "2025-11-10T10:36:29Z",
-      "updatedAt": "2025-11-10T10:36:29Z"
+      "createdAt": "2025-11-16T07:32:43.278917Z",
+      "updatedAt": "2025-11-16T07:32:44.755495Z"
     },
     {
       "streamer": {
-        "id": "AuroraFlux",
-        "alias": "AuroraFlux",
-        "firstName": "Aurora",
-        "lastName": "Miles",
-        "email": "aurora@example.com"
-      },
-      "platforms": {
-        "youtube": {
-          "handle": "@AuroraFlux",
-          "channelId": "UC00000000000000000001",
-          "hubSecret": "aurora-secret"
-        },
-        "twitch": {
-          "username": "AuroraFlux",
-          "broadcasterId": "100100100"
-        }
-      },
-      "createdAt": "2025-11-10T14:41:50.110847Z",
-      "updatedAt": "2025-11-10T14:41:50.110847Z"
-    },
-    {
-      "streamer": {
-        "id": "BitBlaster",
-        "alias": "BitBlaster",
-        "firstName": "Ben",
-        "lastName": "Ito",
-        "email": "ben@example.com"
-      },
-      "platforms": {
-        "youtube": {
-          "handle": "@BitBlaster",
-          "channelId": "UC00000000000000000002",
-          "hubSecret": "bitblast"
-        }
-      },
-      "createdAt": "2025-11-10T14:41:50.125947Z",
-      "updatedAt": "2025-11-10T14:41:50.125947Z"
-    },
-    {
-      "streamer": {
-        "id": "DeltaDrop",
-        "alias": "DeltaDrop",
-        "firstName": "Derek",
-        "lastName": "Lam",
-        "email": "derek@example.com"
-      },
-      "platforms": {
-        "youtube": {
-          "handle": "@DeltaDrop",
-          "channelId": "UC00000000000000000004",
-          "hubSecret": "delta-secret"
-        },
-        "facebook": {
-          "pageId": "fb-deltadrop",
-          "accessToken": "EAAG-deltadrop"
-        }
-      },
-      "createdAt": "2025-11-10T14:41:50.156013Z",
-      "updatedAt": "2025-11-10T14:41:50.156013Z"
-    },
-    {
-      "streamer": {
-        "id": "EchoPulse",
-        "alias": "EchoPulse",
-        "firstName": "Ella",
-        "lastName": "Cho",
-        "email": "ella@example.com"
-      },
-      "platforms": {
-        "twitch": {
-          "username": "EchoPulse",
-          "broadcasterId": "500500500"
-        }
-      },
-      "createdAt": "2025-11-10T14:41:50.169737Z",
-      "updatedAt": "2025-11-10T14:41:50.169737Z"
-    },
-    {
-      "streamer": {
-        "id": "FluxHarbor",
-        "alias": "FluxHarbor",
-        "firstName": "Felix",
-        "lastName": "Harper",
-        "email": "felix@example.com"
-      },
-      "platforms": {
-        "youtube": {
-          "handle": "@FluxHarbor",
-          "channelId": "UC00000000000000000006",
-          "hubSecret": "flux-secret"
-        },
-        "facebook": {
-          "pageId": "fb-fluxharbor",
-          "accessToken": "EAAG-fluxharbor"
-        },
-        "twitch": {
-          "username": "FluxHarborTV",
-          "broadcasterId": "600600600"
-        }
-      },
-      "createdAt": "2025-11-10T14:41:50.183418Z",
-      "updatedAt": "2025-11-10T14:41:50.183418Z"
-    },
-    {
-      "streamer": {
-        "id": "GigaForge",
-        "alias": "GigaForge",
-        "firstName": "Gina",
-        "lastName": "Ford",
-        "email": "gina@example.com"
-      },
-      "platforms": {
-        "youtube": {
-          "handle": "@GigaForge",
-          "channelId": "UC00000000000000000007",
-          "hubSecret": "giga-secret"
-        },
-        "twitch": {
-          "username": "GigaForge",
-          "broadcasterId": "700700700"
-        }
-      },
-      "createdAt": "2025-11-10T14:41:50.19948Z",
-      "updatedAt": "2025-11-10T14:41:50.19948Z"
-    },
-    {
-      "streamer": {
-        "id": "HaloRift",
-        "alias": "HaloRift",
-        "firstName": "Hannah",
-        "lastName": "Lopez",
-        "email": "hannah@example.com"
-      },
-      "platforms": {
-        "facebook": {
-          "pageId": "fb-halorift",
-          "accessToken": "EAAG-halorift"
-        }
-      },
-      "createdAt": "2025-11-10T14:41:50.214264Z",
-      "updatedAt": "2025-11-10T14:41:50.214264Z"
-    },
-    {
-      "streamer": {
-        "id": "IonSpark",
-        "alias": "IonSpark",
-        "firstName": "Ian",
-        "lastName": "Ortiz",
-        "email": "ian@example.com"
-      },
-      "platforms": {
-        "youtube": {
-          "handle": "@IonSpark",
-          "channelId": "UC00000000000000000009",
-          "hubSecret": "ion-secret"
-        },
-        "facebook": {
-          "pageId": "fb-ionspark",
-          "accessToken": "EAAG-ionspark"
-        },
-        "twitch": {
-          "username": "IonSparkLive",
-          "broadcasterId": "900900900"
-        }
-      },
-      "createdAt": "2025-11-10T14:41:50.233816Z",
-      "updatedAt": "2025-11-10T14:41:50.233816Z"
-    },
-    {
-      "streamer": {
-        "id": "JetstreamJules",
-        "alias": "JetstreamJules",
-        "firstName": "Jules",
-        "lastName": "Trent",
-        "email": "jules@example.com"
-      },
-      "platforms": {
-        "facebook": {
-          "pageId": "fb-jetstream",
-          "accessToken": "EAAG-jetstream"
-        },
-        "twitch": {
-          "username": "JetstreamJules",
-          "broadcasterId": "1010101010"
-        }
-      },
-      "createdAt": "2025-11-10T14:41:50.260945Z",
-      "updatedAt": "2025-11-10T14:41:50.260945Z"
-    },
-    {
-      "streamer": {
-        "id": "TedConingsby",
+        "id": "73569d15ffeb4bd8bea1ef56f56dc34d",
         "alias": "Ted Coningsby",
-        "description": "Oii oii! Ladies, gents and teddy bears, welcome to the Ted Coningsby channel, the fun but serious military aviation channel. This is not your usual aviation ...\n\nPlatforms: www.youtube.com (https://www.youtube.com/@TedConingsby)",
+        "description": "Oii oii! Ladies, gents and teddy bears, welcome to the Ted Coningsby channel, the fun but serious military aviation channel. This is not your usual aviation ...",
         "firstName": "",
         "lastName": "",
         "email": "",
@@ -229,82 +45,22 @@
         "youtube": {
           "handle": "@TedConingsby",
           "channelId": "UCCVgP53k4WCUnFg9yFA_YbA",
-          "hubSecret": "4ab8e15654e9b27185de946917e6fa2e"
+          "hubSecret": "wGQweFSvZQznZOQhZJSCYlddYuWmIPOq",
+          "hubLeaseRenewalDue": "2025-11-17T06:32:20Z",
+          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCCVgP53k4WCUnFg9yFA_YbA",
+          "callbackUrl": "https://sharpen.live/alerts",
+          "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
+          "verifyMode": "async",
+          "leaseSeconds": 864000
         }
       },
-      "createdAt": "2025-11-11T13:08:25.54831Z",
-      "updatedAt": "2025-11-11T13:08:25.54831Z"
+      "createdAt": "2025-11-17T06:32:19.638136Z",
+      "updatedAt": "2025-11-17T06:32:20.561455Z"
     },
     {
       "streamer": {
-        "id": "JudgeJeffreyMiddleton",
-        "alias": "Judge Jeffrey Middleton",
-        "description": "Share your videos with friends, family and the world\n\nPlatforms: www.youtube.com (https://www.youtube.com/@judgejeffreymiddleton7573)",
-        "firstName": "",
-        "lastName": "",
-        "email": "",
-        "languages": [
-          "English"
-        ]
-      },
-      "platforms": {
-        "youtube": {
-          "handle": "@judgejeffreymiddleton7573",
-          "channelId": "UCS8gM5S889oBPyN6K07ZC6A",
-          "hubSecret": "2ca8c546e89a44948b5cd5494dab9aaa"
-        }
-      },
-      "createdAt": "2025-11-11T13:14:07.66085Z",
-      "updatedAt": "2025-11-11T13:14:07.66085Z"
-    },
-    {
-      "streamer": {
-        "id": "iSharpen",
-        "alias": "iSharpen",
-        "description": "I'm Baz, I sharpen knives at Findon Precision Knife Sharpening in Adelaide, South Australia. Visit https://isharpen.shop/Contact:Mobile/Cell phone (or WhatsA...\n\nPlatforms: www.youtube.com (https://www.youtube.com/@iSharpen)",
-        "firstName": "",
-        "lastName": "",
-        "email": "",
-        "languages": [
-          "English"
-        ]
-      },
-      "platforms": {
-        "youtube": {
-          "handle": "@iSharpen",
-          "channelId": "UCcEn5aF0PII-DygWmsyP7sg",
-          "hubSecret": "085272d4fb9cefc115ba2f3df9f99d4b"
-        }
-      },
-      "createdAt": "2025-11-11T13:26:16.753064Z",
-      "updatedAt": "2025-11-11T13:26:16.753064Z"
-    },
-    {
-      "streamer": {
-        "id": "Ashville",
-        "alias": "Ashville",
-        "description": "Ashville are specialist in Waste Management, Recycling, Rail Freight \u0026 Construction and are based in London.One side of the business imports primary aggregat...",
-        "firstName": "",
-        "lastName": "",
-        "email": "",
-        "languages": [
-          "English"
-        ]
-      },
-      "platforms": {
-        "youtube": {
-          "handle": "@thisisashville",
-          "channelId": "UC-2XiVy5AbEn2TXf0f2APeQ",
-          "hubSecret": "0e2f24ee302aa85f1f7a8f9f29471084"
-        }
-      },
-      "createdAt": "2025-11-11T13:30:10.638396Z",
-      "updatedAt": "2025-11-11T13:30:10.638396Z"
-    },
-    {
-      "streamer": {
-        "id": "MooseDoesStuff",
-        "alias": "MooseDoesStuff",
+        "id": "231eaca2f22744e49793f395430d15d1",
+        "alias": "I will shave my eyebrows",
         "description": "Share your videos with friends, family and the world",
         "firstName": "",
         "lastName": "",
@@ -315,20 +71,25 @@
       },
       "platforms": {
         "youtube": {
-          "handle": "@MooseDoesStuff",
-          "channelId": "UCyWoKZ6i2hSjgjd3wE56AXQ",
-          "hubSecret": "fbe5f579e3b0c5f1c0a97e3221b5273a",
-          "hubLeaseRenewalDue": "2025-11-12T05:41:06Z"
+          "handle": "@I-will-shave-my-eyebrows",
+          "channelId": "UCvwGfRXMzs2ey1h3opwK2zw",
+          "hubSecret": "-uhGIkMq159tXNozrBJImXdR9X9YUhq2",
+          "hubLeaseRenewalDue": "2025-11-17T06:33:24Z",
+          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCvwGfRXMzs2ey1h3opwK2zw",
+          "callbackUrl": "https://sharpen.live/alerts",
+          "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
+          "verifyMode": "async",
+          "leaseSeconds": 864000
         }
       },
-      "createdAt": "2025-11-12T05:41:05.717352Z",
-      "updatedAt": "2025-11-12T05:41:06.799341Z"
+      "createdAt": "2025-11-17T06:33:22.979369Z",
+      "updatedAt": "2025-11-17T06:33:24.155418Z"
     },
     {
       "streamer": {
-        "id": "SharpenRightServicesLLCMikeWhite",
+        "id": "0a9d7ce8255f441198a6ed3461d320f4",
         "alias": "Sharpen Right Services LLC - Mike White",
-        "description": "Sharpening livestreams and tutorials.",
+        "description": "Sharpen Right Services LLC - Mike White located in League City, Texas.  We are a home based, mobile and mail order sharpening service; specializing in sharpe...",
         "firstName": "",
         "lastName": "",
         "email": "",
@@ -340,12 +101,45 @@
         "youtube": {
           "handle": "@sharpenrightservicesllc",
           "channelId": "UC7d6BuAfHKTLR1l2SSg6HkA",
-          "hubSecret": "fx-kFKjETulZ_fdRSjrDs66t-68yeXCd",
-          "hubLeaseRenewalDue": "2025-11-15T15:51:43Z"
+          "hubSecret": "2pEuC4RTukNuWMTEJdMjjZDoP3gVhMFi",
+          "hubLeaseRenewalDue": "2025-11-17T06:37:11Z",
+          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC7d6BuAfHKTLR1l2SSg6HkA",
+          "callbackUrl": "https://sharpen.live/alerts",
+          "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
+          "verifyMode": "async",
+          "leaseSeconds": 864000
         }
       },
-      "createdAt": "2025-11-15T15:51:42.157625Z",
-      "updatedAt": "2025-11-15T15:51:43.364305Z"
+      "createdAt": "2025-11-17T06:37:10.946941Z",
+      "updatedAt": "2025-11-17T06:37:11.960348Z"
+    },
+    {
+      "streamer": {
+        "id": "4dd203ee36d046e0b686600358c1de65",
+        "alias": "Judge Jeffrey Middleton",
+        "description": "Share your videos with friends, family and the world",
+        "firstName": "",
+        "lastName": "",
+        "email": "",
+        "languages": [
+          "English"
+        ]
+      },
+      "platforms": {
+        "youtube": {
+          "handle": "@judgejeffreymiddleton7573",
+          "channelId": "UCS8gM5S889oBPyN6K07ZC6A",
+          "hubSecret": "IuAbxIHgV-tw2KHChFPJ9-bOuNW66Nnx",
+          "hubLeaseRenewalDue": "2025-11-17T06:37:38Z",
+          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCS8gM5S889oBPyN6K07ZC6A",
+          "callbackUrl": "https://sharpen.live/alerts",
+          "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
+          "verifyMode": "async",
+          "leaseSeconds": 864000
+        }
+      },
+      "createdAt": "2025-11-17T06:37:36.873738Z",
+      "updatedAt": "2025-11-17T06:37:38.001056Z"
     }
   ]
 }
