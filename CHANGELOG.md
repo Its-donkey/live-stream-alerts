@@ -56,6 +56,7 @@
 - Restricted `/alerts` to GET requests from FeedFetcher-Google, logging the raw verification data and rejecting suspicious traffic instead of processing every request blindly.
 - Hardened the YouTube HTTP handlers by sharing JSON/body validation, trimming whitespace, and surfacing meaningful `400` responses whenever subscribe/unsubscribe, metadata, or channel lookup payloads are malformed.
 - WebSub subscriptions now dump the full hub response and log when Google accepts a request so operators can trace every step from the API proxy through confirmation.
+- The companion alGUI now listens to `/api/streamers/watch` so the roster refreshes automatically whenever streamer data changes.
 ### Fixed
 - Persist `streamer.alias` when creating records and require it as the primary identifier so requests without names no longer lose the alias field.
 - Removed references to the deprecated `/api/youtube/new/subscribe` alias so the README only lists active endpoints.
