@@ -26,6 +26,7 @@
 - Inspect POST `/alerts` WebSub notifications, parse the feed payload, and query YouTube to confirm whether the referenced video is a livestream that's currently online.
 - Rotated `data/alertserver.log` into timestamped archives under `data/logs/` on startup so each run writes to a clean file without losing history.
 ### Changed
+- Removed the embedded alGUI assets/handler so the alert server stays API-only, returning a placeholder at `/` and keeping the UI’s traffic out of alert-server logs.
 - Allowed `streamer.firstName`, `streamer.lastName`, and `streamer.email` fields to be blank in the JSON schema so optional contact details no longer trigger validation errors.
 - Moved the HTTP router under `internal/api/v1` and updated docs/CLI tooling so future endpoints live under their API versioned package.
 - Relocated metadata scraping into the YouTube platform tree and corralled all YouTube handlers/clients/subscribers beneath `internal/platforms/youtube/{api,metadata,store,subscriptions}` for clearer ownership.

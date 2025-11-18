@@ -2,6 +2,7 @@ package v1
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -9,8 +10,9 @@ import (
 	"live-stream-alerts/internal/logging"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
 	streamershandlers "live-stream-alerts/internal/streamers/handlers"
-	"live-stream-alerts/internal/ui"
 )
+
+const rootPlaceholder = "UI assets not configured. Run the standalone alGUI project separately.\n"
 
 // RuntimeInfo describes the pieces of server configuration that the UI exposes.
 type RuntimeInfo struct {
@@ -68,7 +70,15 @@ func NewRouter(opts Options) http.Handler {
 		respondJSON(w, opts.RuntimeInfo)
 	})
 
-	mux.Handle("/", ui.Handler())
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, rootPlaceholder)
+	})
 
 	return logging.WithHTTPLogging(mux, logger)
 }

@@ -1,22 +1,20 @@
 # live-stream-alerts
 
-A lightweight Go service that proxies YouTube WebSub subscriptions, stores streamer metadata, and exposes operational endpoints for downstream automation. The companion WebAssembly UI is embedded directly into the binary, so running the alert server automatically serves the dashboard.
+A lightweight Go service that proxies YouTube WebSub subscriptions, stores streamer metadata, and exposes operational endpoints for downstream automation. The companion WebAssembly UI (alGUI) lives in its own project so UI builds and logging stay separate—you deploy the alert server and UI side by side rather than as a single binary.
 
 ## Requirements
 - Go 1.21+
 - (Optional) `make` for your own helper scripts
 
 ## Running the alert server
-1. (Optional) Rebuild the embedded UI if you changed any files under the sibling `alGUI/` folder (the UI source lives alongside this repository; place it at `../alGUI` relative to this repo):
-   ```bash
-   go generate ./internal/ui
-   ```
-   This recompiles the WASM bundle and copies the refreshed static assets into `internal/ui/dist` so they’re embedded at build time.
-2. Start the HTTP server:
+1. Start the HTTP server:
    ```bash
    go run ./cmd/alertserver
    ```
-3. Streamer data is appended to `data/streamers.json`. Provide a different path through `CreateOptions.FilePath` if you embed the handler elsewhere. The dashboard is now available at `/` using the embedded assets, so no extra static server is required.
+2. Streamer data is appended to `data/streamers.json`. Provide a different path through `CreateOptions.FilePath` if you embed the handler elsewhere. The API-only server responds to `/` with a placeholder so you remember to run the UI separately when you need the dashboard.
+
+## Companion UI (alGUI)
+Keep the UI repo (`alGUI`) checked out next to this project (for example `../alGUI`) and host/serve it independently—it's built as a standalone WASM app so you can deploy it behind any static host or local dev server. Point the UI at the alert server’s base URL (and `/api/streamers/watch` SSE endpoint) to keep your dashboards in sync while leaving alert-server logs focused solely on API/WebSub traffic.
 
 ## Configuration
 The WebSub defaults can be configured via environment variables or CLI flags (flags take precedence):
@@ -65,7 +63,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 | DELETE | `/api/streamers`             | Removes a stored streamer record. |
 | POST   | `/api/youtube/metadata`     | Scrapes a public URL and returns its meta description/title. |
 | GET    | `/api/server/config`         | Returns the server runtime information consumed by the UI. |
-| GET    | `/`                          | Serves the embedded alGUI dashboard (HTML + WASM). |
+| GET    | `/`                          | Returns placeholder text reminding you to host alGUI separately. |
 
 ### GET `/alerts`
 - **Purpose:** Handles `hub.challenge` callbacks from YouTube during WebSub verification.
@@ -201,7 +199,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 - **Notes:** Only `http`/`https` URLs are allowed. A `502` is returned if scraping fails or the metadata cannot be extracted.
 
 ### Static asset hosting
-- Requests to `/` now serve the embedded alGUI dashboard so the API and UI are deployed from the same binary.
+- Requests to `/` now respond with `UI assets not configured` so deployments keep alGUI on its own host (and out of the alert server’s logs). Serve the WASM bundle from the `alGUI` project directly.
 
 ## Keeping this document current
 Whenever you introduce or modify an endpoint:
