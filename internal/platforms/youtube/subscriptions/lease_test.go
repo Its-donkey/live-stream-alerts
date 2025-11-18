@@ -33,7 +33,7 @@ func TestRecordLeaseUpdatesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if records[0].Platforms.YouTube.HubLeaseRenewalDue == "" {
+	if records[0].Platforms.YouTube.HubLeaseDate == "" {
 		t.Fatalf("expected lease timestamp to be stored")
 	}
 }

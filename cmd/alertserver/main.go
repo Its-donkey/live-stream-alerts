@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	apiv1 "live-stream-alerts/internal/api/v1"
 	"live-stream-alerts/internal/httpserver"
 	"live-stream-alerts/internal/logging"
+	"live-stream-alerts/internal/platforms/youtube/subscriptions"
 	"live-stream-alerts/internal/streamers"
 )
 
@@ -65,6 +67,18 @@ func main() {
 	// Graceful shutdown on Ctrl+C
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	monitorOpts := subscriptions.Options{
+		Client: &http.Client{Timeout: 10 * time.Second},
+		HubURL: config.YT.HubURL,
+		Logger: logger,
+		Mode:   "subscribe",
+	}
+	subscriptions.StartLeaseMonitor(ctx, subscriptions.LeaseMonitorConfig{
+		StreamersPath: streamers.DefaultFilePath,
+		Interval:      time.Minute,
+		Options:       monitorOpts,
+	})
 
 	select {
 	case <-ctx.Done():

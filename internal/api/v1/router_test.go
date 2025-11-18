@@ -44,8 +44,8 @@ func TestNewRouterServesConfigAndRoot(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", rr.Code)
 		}
-		if body := rr.Body.String(); !strings.Contains(body, "id=\"app-root\"") {
-			t.Fatalf("expected UI markup, got %q", body)
+		if body := rr.Body.String(); body != rootPlaceholder {
+			t.Fatalf("expected placeholder response, got %q", body)
 		}
 	})
 

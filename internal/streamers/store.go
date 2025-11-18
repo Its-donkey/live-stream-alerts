@@ -86,15 +86,15 @@ type FacebookStatus struct {
 
 // YouTubePlatform stores YouTube-specific metadata.
 type YouTubePlatform struct {
-	Handle             string `json:"handle"`
-	ChannelID          string `json:"channelId,omitempty"`
-	HubSecret          string `json:"hubSecret,omitempty"`
-	HubLeaseRenewalDue string `json:"hubLeaseRenewalDue,omitempty"`
-	Topic              string `json:"topic,omitempty"`
-	CallbackURL        string `json:"callbackUrl,omitempty"`
-	HubURL             string `json:"hubUrl,omitempty"`
-	VerifyMode         string `json:"verifyMode,omitempty"`
-	LeaseSeconds       int    `json:"leaseSeconds,omitempty"`
+	Handle       string `json:"handle"`
+	ChannelID    string `json:"channelId,omitempty"`
+	HubSecret    string `json:"hubSecret,omitempty"`
+	HubLeaseDate string `json:"hubLeaseDate,omitempty"`
+	Topic        string `json:"topic,omitempty"`
+	CallbackURL  string `json:"callbackUrl,omitempty"`
+	HubURL       string `json:"hubUrl,omitempty"`
+	VerifyMode   string `json:"verifyMode,omitempty"`
+	LeaseSeconds int    `json:"leaseSeconds,omitempty"`
 }
 
 // FacebookPlatform stores Facebook-specific metadata.
