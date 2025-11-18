@@ -47,6 +47,8 @@ The binary also reads `config.json` on startup for file-based overrides. This is
 
 Omit any field to fall back to the defaults above. The legacy top-level keys (`hub_url`, `callback_url`, etc.) are still honored for backward compatibility, but nesting them under `youtube` keeps the file organized.
 
+When `/alerts` receives a push notification, the server fetches the YouTube watch page for the referenced video, inspects its embedded metadata, and automatically updates the matching streamer record’s `status` when the notification corresponds to a live broadcast. No YouTube Data API key is required for this flow.
+
 ## API reference
 All HTTP routes are registered in `internal/api/v1/router.go`. Update the table below whenever an endpoint is added or altered so this README remains the single source of truth.
 

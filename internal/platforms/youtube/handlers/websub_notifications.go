@@ -3,147 +3,152 @@ package handlers
 import (
 	"context"
 	"encoding/xml"
-	"errors"
-	"fmt"
 	"io"
 	"net/http"
+	"strings"
+	"time"
 
 	"live-stream-alerts/internal/logging"
-	"live-stream-alerts/internal/platforms/youtube/api"
+	"live-stream-alerts/internal/platforms/youtube/liveinfo"
 	"live-stream-alerts/internal/streamers"
 )
 
-const defaultNotificationLimit = 1 << 20 // 1 MiB
+// LiveVideoLookup fetches live metadata for video IDs.
+type LiveVideoLookup interface {
+	Fetch(ctx context.Context, videoIDs []string) (map[string]liveinfo.VideoInfo, error)
+}
 
-// NotificationOptions configures how WebSub notifications are processed.
-type NotificationOptions struct {
+// AlertNotificationOptions configure POST /alerts handling.
+type AlertNotificationOptions struct {
 	Logger        logging.Logger
-	HTTPClient    *http.Client
-	StatusClient  LiveStatusClient
-	BodyLimit     int64
 	StreamersPath string
+	VideoLookup   LiveVideoLookup
 }
 
-// LiveStatusClient describes the subset of the player API used by notifications.
-type LiveStatusClient interface {
-	LiveStatus(ctx context.Context, videoID string) (api.LiveStatus, error)
-}
-
-// HandleNotification ingests POSTed PubSubHubbub notifications from YouTube.
-func HandleNotification(w http.ResponseWriter, r *http.Request, opts NotificationOptions) bool {
+// HandleAlertNotification processes YouTube hub POST notifications.
+func HandleAlertNotification(w http.ResponseWriter, r *http.Request, opts AlertNotificationOptions) bool {
 	if r.Method != http.MethodPost {
 		return false
 	}
-	defer r.Body.Close()
-
-	limit := opts.BodyLimit
-	if limit <= 0 {
-		limit = defaultNotificationLimit
-	}
-	lr := &io.LimitedReader{R: r.Body, N: limit}
-	body, err := io.ReadAll(lr)
-	if err != nil {
-		http.Error(w, "failed to read notification", http.StatusInternalServerError)
-		return true
-	}
-	if lr.N == 0 {
-		http.Error(w, "notification payload too large", http.StatusRequestEntityTooLarge)
-		return true
+	switch r.URL.Path {
+	case "/alert", "/alerts":
+	default:
+		return false
 	}
 
-	feed, err := parseNotificationFeed(body)
-	if err != nil {
-		http.Error(w, "invalid Atom feed", http.StatusBadRequest)
+	if opts.VideoLookup == nil {
+		return false
+	}
+
+	var feed youtubeFeed
+	decoder := xml.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	if err := decoder.Decode(&feed); err != nil {
+		if opts.Logger != nil {
+			opts.Logger.Printf("failed to decode hub notification from %s: %v", r.RemoteAddr, err)
+		}
+		http.Error(w, "invalid atom feed", http.StatusBadRequest)
 		return true
 	}
+
 	if len(feed.Entries) == 0 {
+		if opts.Logger != nil {
+			opts.Logger.Printf("hub notification from %s contained no entries", r.RemoteAddr)
+		}
 		w.WriteHeader(http.StatusNoContent)
 		return true
 	}
 
-	client := opts.StatusClient
-	if client == nil {
-		client = api.NewPlayerClient(api.PlayerClientOptions{HTTPClient: opts.HTTPClient})
+	videoIDs := extractVideoIDs(feed)
+	if opts.Logger != nil {
+		opts.Logger.Printf("Processing hub notification (%d entries) videos=%s channel=%s", len(feed.Entries), strings.Join(videoIDs, ","), feed.Entries[0].ChannelID)
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	videoInfo, err := opts.VideoLookup.Fetch(ctx, videoIDs)
+	if err != nil {
+		if opts.Logger != nil {
+			opts.Logger.Printf("failed to fetch live metadata for videos %s: %v", strings.Join(videoIDs, ","), err)
+		}
+		w.WriteHeader(http.StatusAccepted)
+		return true
 	}
 
+	var liveUpdates int
 	for _, entry := range feed.Entries {
-		if entry.VideoID == "" {
-			logNotification(opts.Logger, entry, api.LiveStatus{}, fmt.Errorf("missing video id"))
+		info, ok := videoInfo[entry.VideoID]
+		if !ok || !info.IsLive() {
+			if opts.Logger != nil {
+				if !ok {
+					opts.Logger.Printf("no metadata returned for video %s, skipping", entry.VideoID)
+				} else {
+					opts.Logger.Printf("video %s (%s) not live; broadcast=%q start=%s", entry.VideoID, entry.Title, info.LiveBroadcastContent, info.ActualStartTime)
+				}
+			}
 			continue
 		}
-		status, err := client.LiveStatus(r.Context(), entry.VideoID)
-		logNotification(opts.Logger, entry, status, err)
-		if err == nil {
-			updateStreamerLiveStatus(opts.StreamersPath, entry, status, opts.Logger)
+		startedAt := info.ActualStartTime
+		if startedAt.IsZero() {
+			startedAt = entry.Updated
+		}
+		_, err := streamers.UpdateYouTubeLiveStatus(opts.StreamersPath, entry.ChannelID, streamers.YouTubeLiveStatus{
+			Live:      true,
+			VideoID:   entry.VideoID,
+			StartedAt: startedAt,
+		})
+		if err != nil && opts.Logger != nil {
+			opts.Logger.Printf("failed to update live status for %s: %v", entry.ChannelID, err)
+			continue
+		}
+		liveUpdates++
+		if opts.Logger != nil {
+			opts.Logger.Printf("Live stream detected: channel=%s video=%s title=%s", entry.ChannelID, entry.VideoID, entry.Title)
 		}
 	}
 
+	if liveUpdates == 0 && opts.Logger != nil {
+		opts.Logger.Printf("Processed alert notification for %d video(s); no live streams detected", len(feed.Entries))
+	}
 	w.WriteHeader(http.StatusNoContent)
 	return true
 }
 
-func parseNotificationFeed(data []byte) (notificationFeed, error) {
-	var feed notificationFeed
-	if err := xml.Unmarshal(data, &feed); err != nil {
-		return feed, err
-	}
-	return feed, nil
+type youtubeFeed struct {
+	Entries []youtubeEntry `xml:"entry"`
 }
 
-func logNotification(logger logging.Logger, entry notificationEntry, status api.LiveStatus, err error) {
-	if logger == nil {
-		return
-	}
-	title := entry.Title
-	if title == "" {
-		title = status.Title
-	}
-	if title == "" {
-		title = entry.VideoID
-	}
-
-	if err != nil {
-		logger.Printf("YouTube notification for %s failed: %v", title, err)
-		return
-	}
-
-	channelID := entry.ChannelID
-	if channelID == "" {
-		channelID = status.ChannelID
-	}
-
-	if status.IsOnline() {
-		logger.Printf("YouTube livestream online: %s (video=%s channel=%s)", title, status.VideoID, channelID)
-		return
-	}
-	if status.IsLive {
-		logger.Printf("YouTube livestream offline: %s (video=%s liveNow=%t status=%s)", title, status.VideoID, status.IsLiveNow, status.PlayabilityStatus)
-		return
-	}
-	logger.Printf("YouTube upload ignored (not live): %s (video=%s)", title, status.VideoID)
+type youtubeEntry struct {
+	VideoID   string      `xml:"http://www.youtube.com/xml/schemas/2015 videoId"`
+	ChannelID string      `xml:"http://www.youtube.com/xml/schemas/2015 channelId"`
+	Title     string      `xml:"title"`
+	Published time.Time   `xml:"published"`
+	Updated   time.Time   `xml:"updated"`
+	Link      entryLink   `xml:"link"`
+	Author    entryAuthor `xml:"author"`
 }
 
-func updateStreamerLiveStatus(path string, entry notificationEntry, status api.LiveStatus, logger logging.Logger) {
-	if path == "" || entry.ChannelID == "" {
-		return
-	}
-	var err error
-	if status.IsOnline() {
-		_, err = streamers.SetYouTubeLive(path, entry.ChannelID, entry.VideoID, status.StartedAt)
-	} else {
-		_, err = streamers.ClearYouTubeLive(path, entry.ChannelID)
-	}
-	if err != nil && logger != nil && !errors.Is(err, streamers.ErrStreamerNotFound) {
-		logger.Printf("failed to update live status for channel %s: %v", entry.ChannelID, err)
-	}
+type entryLink struct {
+	Href string `xml:"href,attr"`
 }
 
-type notificationFeed struct {
-	Entries []notificationEntry `xml:"entry"`
+type entryAuthor struct {
+	Name string `xml:"name"`
+	URI  string `xml:"uri"`
 }
 
-type notificationEntry struct {
-	Title     string `xml:"title"`
-	VideoID   string `xml:"http://www.youtube.com/xml/schemas/2015 videoId"`
-	ChannelID string `xml:"http://www.youtube.com/xml/schemas/2015 channelId"`
+func extractVideoIDs(feed youtubeFeed) []string {
+	ids := make([]string, 0, len(feed.Entries))
+	seen := make(map[string]struct{}, len(feed.Entries))
+	for _, entry := range feed.Entries {
+		id := strings.TrimSpace(entry.VideoID)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	return ids
 }

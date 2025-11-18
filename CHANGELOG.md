@@ -3,6 +3,7 @@
 ## [Unreleased]
 ### Added
 - Added a typed config loader plus JSON schema that accepts a nested `server` block (with `addr`/`port`) and `youtube` overrides inside `config.json`, falling back to the historic flat keys so operators can retarget the HTTP listener without recompiling.
+- Parse incoming YouTube WebSub notifications, fetch the related watch pages (no API key required), and persist streamer `status` details whenever a live broadcast starts so downstream tooling can react instantly.
 - Introduced the v1 HTTP router with request-dump logging so every inbound request is captured alongside the YouTube alert verification endpoint.
 - Added the `/api/youtube/subscribe` proxy that forwards JSON payloads to the YouTube PubSubHubbub hub while applying the required defaults.
 - Added the `/api/youtube/unsubscribe` endpoint so operators can stop receiving hub callbacks for a topic without editing configs manually.

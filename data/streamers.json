@@ -3,9 +3,9 @@
   "streamers": [
     {
       "streamer": {
-        "id": "JordanMatter",
-        "alias": "Jordan Matter",
-        "description": "My daughter has taken over my channel!",
+        "id": "395848a32c2c47c2a231c1b59f2b93d4",
+        "alias": "JonSiiN",
+        "description": "Hello everyone Welcome to the official JRK Knives channel. Knives have been used since prehistoric times for a plethora of activities from weapons and tools ...",
         "firstName": "",
         "lastName": "",
         "email": "",
@@ -15,25 +15,25 @@
       },
       "platforms": {
         "youtube": {
-          "handle": "@jordanmatter",
-          "channelId": "UCI3szCgzGTRBTF_2dVaTZdQ",
-          "hubSecret": "GmtXT02Gnu7-R3iVcAIBUc1pOsOZkfwQ",
-          "hubLeaseRenewalDue": "2025-11-16T07:32:44Z",
-          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCI3szCgzGTRBTF_2dVaTZdQ",
-          "callbackUrl": "https://sharpen.live/alerts",
+          "handle": "@JRKKnives",
+          "channelId": "UCbT1jA8RTEHk7y6rn2vHNGw",
+          "hubSecret": "9C_7M8CuW959d3PFQ6fZ-FRaj3yzSvel",
+          "hubLeaseRenewalDue": "2025-11-18T08:56:59Z",
+          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCbT1jA8RTEHk7y6rn2vHNGw",
+          "callbackUrl": "https://sharpen.live/dev/alerts",
           "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
           "verifyMode": "async",
           "leaseSeconds": 864000
         }
       },
-      "createdAt": "2025-11-16T07:32:43.278917Z",
-      "updatedAt": "2025-11-16T07:32:44.755495Z"
+      "createdAt": "2025-11-18T08:56:57.714492Z",
+      "updatedAt": "2025-11-18T08:56:59.301598Z"
     },
     {
       "streamer": {
-        "id": "73569d15ffeb4bd8bea1ef56f56dc34d",
-        "alias": "Ted Coningsby",
-        "description": "Oii oii! Ladies, gents and teddy bears, welcome to the Ted Coningsby channel, the fun but serious military aviation channel. This is not your usual aviation ...",
+        "id": "4b8e82c4a16e49e58c1ac2993e7f85e0",
+        "alias": "Attorney Melanie Little",
+        "description": "Melanie Little is a New York lawyer with over 30 years experience as a trial attorney and litigator in state and federal courts, who is now a legal analyst a...",
         "firstName": "",
         "lastName": "",
         "email": "",
@@ -43,103 +43,19 @@
       },
       "platforms": {
         "youtube": {
-          "handle": "@TedConingsby",
-          "channelId": "UCCVgP53k4WCUnFg9yFA_YbA",
-          "hubSecret": "wGQweFSvZQznZOQhZJSCYlddYuWmIPOq",
-          "hubLeaseRenewalDue": "2025-11-17T06:32:20Z",
-          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCCVgP53k4WCUnFg9yFA_YbA",
-          "callbackUrl": "https://sharpen.live/alerts",
+          "handle": "@AttorneyMelanieLittle",
+          "channelId": "UCFSlI8Y3Zdoq5buNW_40AAA",
+          "hubSecret": "nlXDE9expkcuWHJ4vXXe3UOjfDRYwRvy",
+          "hubLeaseRenewalDue": "2025-11-18T10:07:14Z",
+          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCFSlI8Y3Zdoq5buNW_40AAA",
+          "callbackUrl": "https://sharpen.live/dev/alerts",
           "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
           "verifyMode": "async",
           "leaseSeconds": 864000
         }
       },
-      "createdAt": "2025-11-17T06:32:19.638136Z",
-      "updatedAt": "2025-11-17T06:32:20.561455Z"
-    },
-    {
-      "streamer": {
-        "id": "231eaca2f22744e49793f395430d15d1",
-        "alias": "I will shave my eyebrows",
-        "description": "Share your videos with friends, family and the world",
-        "firstName": "",
-        "lastName": "",
-        "email": "",
-        "languages": [
-          "English"
-        ]
-      },
-      "platforms": {
-        "youtube": {
-          "handle": "@I-will-shave-my-eyebrows",
-          "channelId": "UCvwGfRXMzs2ey1h3opwK2zw",
-          "hubSecret": "-uhGIkMq159tXNozrBJImXdR9X9YUhq2",
-          "hubLeaseRenewalDue": "2025-11-17T06:33:24Z",
-          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCvwGfRXMzs2ey1h3opwK2zw",
-          "callbackUrl": "https://sharpen.live/alerts",
-          "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
-          "verifyMode": "async",
-          "leaseSeconds": 864000
-        }
-      },
-      "createdAt": "2025-11-17T06:33:22.979369Z",
-      "updatedAt": "2025-11-17T06:33:24.155418Z"
-    },
-    {
-      "streamer": {
-        "id": "0a9d7ce8255f441198a6ed3461d320f4",
-        "alias": "Sharpen Right Services LLC - Mike White",
-        "description": "Sharpen Right Services LLC - Mike White located in League City, Texas.  We are a home based, mobile and mail order sharpening service; specializing in sharpe...",
-        "firstName": "",
-        "lastName": "",
-        "email": "",
-        "languages": [
-          "English"
-        ]
-      },
-      "platforms": {
-        "youtube": {
-          "handle": "@sharpenrightservicesllc",
-          "channelId": "UC7d6BuAfHKTLR1l2SSg6HkA",
-          "hubSecret": "2pEuC4RTukNuWMTEJdMjjZDoP3gVhMFi",
-          "hubLeaseRenewalDue": "2025-11-17T06:37:11Z",
-          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC7d6BuAfHKTLR1l2SSg6HkA",
-          "callbackUrl": "https://sharpen.live/alerts",
-          "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
-          "verifyMode": "async",
-          "leaseSeconds": 864000
-        }
-      },
-      "createdAt": "2025-11-17T06:37:10.946941Z",
-      "updatedAt": "2025-11-17T06:37:11.960348Z"
-    },
-    {
-      "streamer": {
-        "id": "4dd203ee36d046e0b686600358c1de65",
-        "alias": "Judge Jeffrey Middleton",
-        "description": "Share your videos with friends, family and the world",
-        "firstName": "",
-        "lastName": "",
-        "email": "",
-        "languages": [
-          "English"
-        ]
-      },
-      "platforms": {
-        "youtube": {
-          "handle": "@judgejeffreymiddleton7573",
-          "channelId": "UCS8gM5S889oBPyN6K07ZC6A",
-          "hubSecret": "IuAbxIHgV-tw2KHChFPJ9-bOuNW66Nnx",
-          "hubLeaseRenewalDue": "2025-11-17T06:37:38Z",
-          "topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UCS8gM5S889oBPyN6K07ZC6A",
-          "callbackUrl": "https://sharpen.live/alerts",
-          "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
-          "verifyMode": "async",
-          "leaseSeconds": 864000
-        }
-      },
-      "createdAt": "2025-11-17T06:37:36.873738Z",
-      "updatedAt": "2025-11-17T06:37:38.001056Z"
+      "createdAt": "2025-11-18T10:07:12.769107Z",
+      "updatedAt": "2025-11-18T10:07:14.577362Z"
     }
   ]
 }

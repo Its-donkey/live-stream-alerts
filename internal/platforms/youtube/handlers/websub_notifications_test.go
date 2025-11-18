@@ -1,79 +1,134 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
+	"path/filepath"
 	"testing"
+	"time"
 
-	"live-stream-alerts/internal/platforms/youtube/api"
+	"live-stream-alerts/internal/platforms/youtube/liveinfo"
+	"live-stream-alerts/internal/streamers"
 )
 
-func TestHandleNotificationChecksLiveStatus(t *testing.T) {
-	logger := &memoryLogger{}
-	client := &stubLiveStatusClient{statuses: map[string]api.LiveStatus{
-		"abc": {VideoID: "abc", IsLive: true, IsLiveNow: true, PlayabilityStatus: "OK"},
-	}}
-	req := httptest.NewRequest(http.MethodPost, "/alerts", strings.NewReader(sampleNotificationBody("abc")))
-	resp := httptest.NewRecorder()
-
-	handled := HandleNotification(resp, req, NotificationOptions{Logger: logger, StatusClient: client})
-	if !handled {
-		t.Fatalf("expected notification to be handled")
-	}
-	if resp.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d", resp.Code)
-	}
-	if client.calls != 1 {
-		t.Fatalf("expected one status call, got %d", client.calls)
-	}
-	if len(logger.msgs) == 0 {
-		t.Fatalf("expected log entries")
-	}
+type stubVideoLookup struct {
+	infos map[string]liveinfo.VideoInfo
+	err   error
+	calls int
 }
 
-func TestHandleNotificationRejectsInvalidFeed(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/alerts", strings.NewReader("<feed>broken"))
-	resp := httptest.NewRecorder()
-
-	handled := HandleNotification(resp, req, NotificationOptions{})
-	if !handled {
-		t.Fatalf("expected handler to run")
-	}
-	if resp.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", resp.Code)
-	}
-}
-
-func TestHandleNotificationEnforcesBodyLimit(t *testing.T) {
-	body := strings.Repeat("a", 64)
-	req := httptest.NewRequest(http.MethodPost, "/alerts", strings.NewReader(body))
-	resp := httptest.NewRecorder()
-
-	HandleNotification(resp, req, NotificationOptions{BodyLimit: 10})
-	if resp.Code != http.StatusRequestEntityTooLarge {
-		t.Fatalf("expected 413, got %d", resp.Code)
-	}
-}
-
-type stubLiveStatusClient struct {
-	statuses map[string]api.LiveStatus
-	calls    int
-}
-
-func (s *stubLiveStatusClient) LiveStatus(ctx context.Context, videoID string) (api.LiveStatus, error) {
+func (s *stubVideoLookup) Fetch(ctx context.Context, videoIDs []string) (map[string]liveinfo.VideoInfo, error) {
 	s.calls++
-	return s.statuses[videoID], nil
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.infos, nil
 }
 
-func sampleNotificationBody(videoID string) string {
-	return `<?xml version="1.0" encoding="UTF-8"?>
+func TestHandleAlertNotificationUpdatesStatus(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "streamers.json")
+	_, err := streamers.Append(path, streamers.Record{
+		Streamer: streamers.Streamer{Alias: "Test"},
+		Platforms: streamers.Platforms{
+			YouTube: &streamers.YouTubePlatform{ChannelID: "UCdemo"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("append: %v", err)
+	}
+
+	body := `<?xml version='1.0' encoding='UTF-8'?>
 <feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns="http://www.w3.org/2005/Atom">
  <entry>
-  <yt:videoId>` + videoID + `</yt:videoId>
-  <yt:channelId>UC123</yt:channelId>
-  <title>Live</title>
+  <yt:videoId>fbfHCxvsny0</yt:videoId>
+  <yt:channelId>UCdemo</yt:channelId>
+  <title>Testing 1234</title>
+  <published>2025-11-16T09:02:38+00:00</published>
+  <updated>2025-11-16T09:02:41+00:00</updated>
  </entry>
 </feed>`
+
+	req := httptest.NewRequest(http.MethodPost, "/alerts", bytes.NewBufferString(body))
+	rr := httptest.NewRecorder()
+	started := time.Date(2025, 11, 16, 9, 2, 41, 0, time.UTC)
+	lookup := &stubVideoLookup{
+		infos: map[string]liveinfo.VideoInfo{
+			"fbfHCxvsny0": {
+				ID:                   "fbfHCxvsny0",
+				ChannelID:            "UCdemo",
+				LiveBroadcastContent: "live",
+				ActualStartTime:      started,
+			},
+		},
+	}
+	opts := AlertNotificationOptions{
+		StreamersPath: path,
+		VideoLookup:   lookup,
+	}
+
+	if !HandleAlertNotification(rr, req, opts) {
+		t.Fatalf("expected handler to process request")
+	}
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", rr.Code)
+	}
+	if lookup.calls != 1 {
+		t.Fatalf("expected lookup to be called once, got %d", lookup.calls)
+	}
+
+	records, err := streamers.List(path)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(records) != 1 || !records[0].Status.Live {
+		t.Fatalf("expected live status to be set")
+	}
+	if records[0].Status.YouTube == nil || records[0].Status.YouTube.VideoID != "fbfHCxvsny0" {
+		t.Fatalf("expected youtube status to be populated")
+	}
+}
+
+func TestHandleAlertNotificationRejectsInvalidFeed(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/alerts", bytes.NewBufferString("not xml"))
+	rr := httptest.NewRecorder()
+	opts := AlertNotificationOptions{VideoLookup: &stubVideoLookup{}}
+
+	if !HandleAlertNotification(rr, req, opts) {
+		t.Fatalf("expected handler to run")
+	}
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
+	}
+}
+
+func TestHandleAlertNotificationHandlesLookupFailure(t *testing.T) {
+	body := `<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns="http://www.w3.org/2005/Atom">
+ <entry>
+  <yt:videoId>abc123</yt:videoId>
+  <yt:channelId>UCdemo</yt:channelId>
+  <title>Test</title>
+ </entry>
+</feed>`
+	req := httptest.NewRequest(http.MethodPost, "/alerts", bytes.NewBufferString(body))
+	rr := httptest.NewRecorder()
+	opts := AlertNotificationOptions{VideoLookup: &stubVideoLookup{err: errors.New("lookup failed")}}
+
+	if !HandleAlertNotification(rr, req, opts) {
+		t.Fatalf("expected handler to run")
+	}
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 when lookup fails, got %d", rr.Code)
+	}
+}
+
+func TestHandleAlertNotificationSkipsUnsupportedPaths(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/other", nil)
+	if HandleAlertNotification(httptest.NewRecorder(), req, AlertNotificationOptions{VideoLookup: &stubVideoLookup{}}) {
+		t.Fatalf("expected handler to ignore unsupported paths")
+	}
 }
