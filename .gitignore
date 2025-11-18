@@ -24,5 +24,9 @@ cover/
 frontend/
 *.zip
 listfuncs/
+
+# Application data
 streamers.json
-data/logs/
+config.json
+/data/
+data/streamers.json
