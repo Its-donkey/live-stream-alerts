@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 ### Added
+- Added a typed config loader plus JSON schema that accepts a nested `server` block (with `addr`/`port`) and `youtube` overrides inside `config.json`, falling back to the historic flat keys so operators can retarget the HTTP listener without recompiling.
 - Introduced the v1 HTTP router with request-dump logging so every inbound request is captured alongside the YouTube alert verification endpoint.
 - Added the `/api/youtube/subscribe` proxy that forwards JSON payloads to the YouTube PubSubHubbub hub while applying the required defaults.
 - Added the `/api/youtube/unsubscribe` endpoint so operators can stop receiving hub callbacks for a topic without editing configs manually.
@@ -20,6 +21,9 @@
 - Stubbed platform folders (`internal/platforms/{youtube,facebook,twitch}`) plus shared logging utilities to support future providers.
 - Added a root `.gitignore` to drop editor/OS cruft, `cmd/alertserver/out.bin`, and other generated artifacts (including generated WebAssembly binaries).
 - Added a root `README.md` with setup instructions and a canonical list of every HTTP endpoint so future additions stay documented.
+- Added `/api/streamers/watch`, a server-sent events endpoint clients can subscribe to so browser dashboards reload when `streamers.json` changes.
+- Once a WebSub notification confirms a YouTube livestream is online, persist the streamer’s `status` with the active video ID, start timestamp, and platform list so downstream tooling can display who’s live.
+- Inspect POST `/alerts` WebSub notifications, parse the feed payload, and query YouTube to confirm whether the referenced video is a livestream that's currently online.
 - Rotated `data/alertserver.log` into timestamped archives under `data/logs/` on startup so each run writes to a clean file without losing history.
 ### Changed
 - Allowed `streamer.firstName`, `streamer.lastName`, and `streamer.email` fields to be blank in the JSON schema so optional contact details no longer trigger validation errors.
@@ -30,7 +34,7 @@
 - Added dedicated GET/POST/DELETE handler coverage for `/api/streamers` and now advertise all supported methods via the `Allow` header (including `DELETE`) so clients can reliably introspect the endpoint.
 - Dropped the `/v1` segment from every public API path (for example, `/api/v1/streamers` is now `/api/streamers`) to simplify client integrations.
 - Documented the shared `/api/streamers` handler (README + Postman collection) so clients understand DELETE lives on the same base path as GET/POST and can rely on the `Allow` header.
-- Extracted the WebAssembly UI into a sibling project so this repository now focuses solely on the alert server APIs.
+- Embedded the WebAssembly UI directly into the alert server binary so a single process now serves both the dashboard and the APIs.
 - Renamed the metadata scraping endpoint to `/api/youtube/metadata` (including handler types) so the path and code align with what the endpoint returns.
 - Removed the `createdAt` requirement from `DELETE /api/streamers/{id}` so operators only need to provide the streamer ID when deleting records.
 - The subscribe handler now mirrors the hub's HTTP response (body/status) to the API client and falls back to the upstream status text when the hub omits a body.
@@ -53,6 +57,7 @@
 - Restricted `/alerts` to GET requests from FeedFetcher-Google, logging the raw verification data and rejecting suspicious traffic instead of processing every request blindly.
 - Hardened the YouTube HTTP handlers by sharing JSON/body validation, trimming whitespace, and surfacing meaningful `400` responses whenever subscribe/unsubscribe, metadata, or channel lookup payloads are malformed.
 - WebSub subscriptions now dump the full hub response and log when Google accepts a request so operators can trace every step from the API proxy through confirmation.
+- The companion alGUI now listens to `/api/streamers/watch` so the roster refreshes automatically whenever streamer data changes.
 ### Fixed
 - Persist `streamer.alias` when creating records and require it as the primary identifier so requests without names no longer lose the alias field.
 - Removed references to the deprecated `/api/youtube/new/subscribe` alias so the README only lists active endpoints.

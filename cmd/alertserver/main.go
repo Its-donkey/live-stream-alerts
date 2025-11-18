@@ -26,12 +26,10 @@ func main() {
 	}
 	defer logFile.Close()
 
-	config.MustLoad("config.json")
+	appCfg := config.MustLoad("config.json")
 	logger := logging.New()
-	const (
-		addr = "127.0.0.1"
-		port = ":8880"
-	)
+	addr := appCfg.Server.Addr
+	port := appCfg.Server.Port
 	readWindow := 10 * time.Second
 
 	// -----------------------------------------------------

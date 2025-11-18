@@ -72,6 +72,31 @@
 					"response": []
 				},
 				{
+					"name": "GET /api/streamers/watch",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "text/event-stream"
+							}
+						],
+						"url": {
+							"raw": "{{serverBase}}/api/streamers/watch",
+							"host": [
+								"{{serverBase}}"
+							],
+							"path": [
+								"api",
+								"streamers",
+								"watch"
+							]
+						},
+						"description": "Server-Sent Events endpoint that emits a `ready` event followed by `change` events whenever `data/streamers.json` is modified. Use this to trigger UI reloads when streamer records are updated."
+					},
+					"response": []
+				},
+				{
 					"name": "POST /api/streamers",
 					"request": {
 						"method": "POST",
