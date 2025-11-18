@@ -195,6 +195,105 @@ func List(path string) ([]Record, error) {
 	return records, nil
 }
 
+// YouTubeLiveStatus describes the live state to persist for a YouTube channel.
+type YouTubeLiveStatus struct {
+	Live      bool
+	VideoID   string
+	StartedAt time.Time
+}
+
+// UpdateYouTubeLiveStatus updates the stored status for the streamer owning the channel ID.
+func UpdateYouTubeLiveStatus(path, channelID string, liveStatus YouTubeLiveStatus) (Record, error) {
+	if path == "" {
+		return Record{}, errors.New("streamers file path is required")
+	}
+	ch := strings.TrimSpace(channelID)
+	if ch == "" {
+		return Record{}, errors.New("channel id is required")
+	}
+
+	var updated Record
+	err := UpdateFile(path, func(file *File) error {
+		for i := range file.Records {
+			yt := file.Records[i].Platforms.YouTube
+			if yt == nil || !strings.EqualFold(yt.ChannelID, ch) {
+				continue
+			}
+			applyYouTubeStatus(&file.Records[i], liveStatus)
+			file.Records[i].UpdatedAt = time.Now().UTC()
+			updated = file.Records[i]
+			return nil
+		}
+		return fmt.Errorf("%w: %s", ErrStreamerNotFound, ch)
+	})
+	if err != nil {
+		return Record{}, err
+	}
+	return updated, nil
+}
+
+func applyYouTubeStatus(record *Record, liveStatus YouTubeLiveStatus) {
+	if record.Status == nil {
+		record.Status = &Status{}
+	}
+	if record.Status.YouTube == nil {
+		record.Status.YouTube = &YouTubeStatus{}
+	}
+	record.Status.YouTube.Live = liveStatus.Live
+	record.Status.YouTube.VideoID = liveStatus.VideoID
+	if liveStatus.StartedAt.IsZero() {
+		record.Status.YouTube.StartedAt = time.Time{}
+	} else {
+		record.Status.YouTube.StartedAt = liveStatus.StartedAt.UTC()
+	}
+
+	if liveStatus.Live {
+		record.Status.Platforms = addPlatform(record.Status.Platforms, platformYouTube)
+	} else {
+		record.Status.Platforms = removePlatform(record.Status.Platforms, platformYouTube)
+	}
+	record.Status.Live = liveStatus.Live
+	if !liveStatus.Live && record.Status.YouTube != nil {
+		record.Status.YouTube.Live = false
+		record.Status.YouTube.VideoID = ""
+		record.Status.YouTube.StartedAt = time.Time{}
+	}
+	if len(record.Status.Platforms) == 0 && !record.Status.Live {
+		record.Status.Platforms = nil
+	}
+}
+
+func addPlatform(platforms []string, platform string) []string {
+	platform = strings.ToLower(strings.TrimSpace(platform))
+	if platform == "" {
+		return platforms
+	}
+	for _, existing := range platforms {
+		if strings.EqualFold(existing, platform) {
+			return platforms
+		}
+	}
+	return append(platforms, platform)
+}
+
+func removePlatform(platforms []string, platform string) []string {
+	if len(platforms) == 0 {
+		return platforms
+	}
+	platform = strings.ToLower(strings.TrimSpace(platform))
+	out := platforms[:0]
+	for _, existing := range platforms {
+		if strings.EqualFold(existing, platform) {
+			continue
+		}
+		out = append(out, existing)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // Update applies modifications to an existing streamer.
 func Update(path string, fields UpdateFields) (Record, error) {
 	if path == "" {
@@ -407,26 +506,6 @@ func extractChannelIDFromTopic(topic string) string {
 		return ""
 	}
 	return u.Query().Get("channel_id")
-}
-
-func addPlatform(platforms []string, platform string) []string {
-	platform = strings.ToLower(platform)
-	for _, existing := range platforms {
-		if existing == platform {
-			return platforms
-		}
-	}
-	return append(platforms, platform)
-}
-
-func removePlatform(platforms []string, platform string) []string {
-	platform = strings.ToLower(platform)
-	for i, existing := range platforms {
-		if existing == platform {
-			return append(platforms[:i], platforms[i+1:]...)
-		}
-	}
-	return platforms
 }
 
 func refreshLiveFlag(status *Status) {

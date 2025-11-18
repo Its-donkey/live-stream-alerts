@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"live-stream-alerts/internal/platforms/youtube/api"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
+	"live-stream-alerts/internal/platforms/youtube/liveinfo"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 	"live-stream-alerts/internal/streamers"
 )
@@ -30,7 +29,13 @@ func (s *stubLogger) Printf(format string, args ...any) {
 func TestNewRouterServesConfigAndRoot(t *testing.T) {
 	logger := &stubLogger{}
 	runtime := RuntimeInfo{Name: "app", Addr: "127.0.0.1", Port: ":1234", ReadTimeout: "1s"}
-	router := NewRouter(Options{Logger: logger, RuntimeInfo: runtime})
+	router := NewRouter(Options{
+		Logger:      logger,
+		RuntimeInfo: runtime,
+		AlertNotifications: youtubehandlers.AlertNotificationOptions{
+			VideoLookup: noopVideoLookup{},
+		},
+	})
 
 	t.Run("root", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -94,6 +99,9 @@ func TestAlertsRouteHandlesVerification(t *testing.T) {
 	router := NewRouter(Options{
 		Logger:        logger,
 		StreamersPath: streamersPath,
+		AlertNotifications: youtubehandlers.AlertNotificationOptions{
+			VideoLookup: noopVideoLookup{},
+		},
 	})
 
 	token := "verify-token"
@@ -119,9 +127,19 @@ func TestAlertsRouteHandlesVerification(t *testing.T) {
 	}
 }
 
-func TestAlertsRouteRejectsUnsupportedMethods(t *testing.T) {
-	router := NewRouter(Options{})
-	req := httptest.NewRequest(http.MethodPost, "/alerts", nil)
+func TestAlertsRoutePostRequiresValidFeed(t *testing.T) {
+	tmp := t.TempDir()
+	streamersPath := filepath.Join(tmp, "streamers.json")
+	if err := os.WriteFile(streamersPath, []byte(`{"$schema":"","streamers":[]}`), 0o644); err != nil {
+		t.Fatalf("write streamers file: %v", err)
+	}
+	router := NewRouter(Options{
+		StreamersPath: streamersPath,
+		AlertNotifications: youtubehandlers.AlertNotificationOptions{
+			VideoLookup: noopVideoLookup{},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/alerts", strings.NewReader("not xml"))
 	rr := httptest.NewRecorder()
 
 	router.ServeHTTP(rr, req)
@@ -176,16 +194,22 @@ func TestAlertsRouteProcessesNotifications(t *testing.T) {
 	}
 
 	logger := &stubLogger{}
-	statusClient := &fakeStatusClient{statuses: map[string]api.LiveStatus{
-		"abc123": {VideoID: "abc123", IsLive: true, IsLiveNow: true, PlayabilityStatus: "OK"},
+	lookup := &fakeVideoLookup{responses: map[string]liveinfo.VideoInfo{
+		"abc123": {
+			ID:                   "abc123",
+			ChannelID:            "UC123",
+			Title:                "Live show",
+			LiveBroadcastContent: "live",
+			ActualStartTime:      time.Now(),
+		},
 	}}
 
 	router := NewRouter(Options{
 		Logger:        logger,
 		StreamersPath: streamersPath,
-		AlertNotifications: youtubehandlers.NotificationOptions{
-			Logger:       logger,
-			StatusClient: statusClient,
+		AlertNotifications: youtubehandlers.AlertNotificationOptions{
+			Logger:      logger,
+			VideoLookup: lookup,
 		},
 	})
 
@@ -207,8 +231,8 @@ func TestAlertsRouteProcessesNotifications(t *testing.T) {
 	if resp.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d", resp.Code)
 	}
-	if statusClient.calls != 1 {
-		t.Fatalf("expected live status client to be called once, got %d", statusClient.calls)
+	if lookup.calls != 1 {
+		t.Fatalf("expected live lookup to be called once, got %d", lookup.calls)
 	}
 	records, err := streamers.List(streamersPath)
 	if err != nil {
@@ -222,9 +246,26 @@ func TestAlertsRouteProcessesNotifications(t *testing.T) {
 	}
 }
 
-type fakeStatusClient struct {
-	statuses map[string]api.LiveStatus
-	calls    int
+type fakeVideoLookup struct {
+	responses map[string]liveinfo.VideoInfo
+	calls     int
+}
+
+func (f *fakeVideoLookup) Fetch(ctx context.Context, videoIDs []string) (map[string]liveinfo.VideoInfo, error) {
+	f.calls++
+	out := make(map[string]liveinfo.VideoInfo, len(videoIDs))
+	for _, id := range videoIDs {
+		if info, ok := f.responses[id]; ok {
+			out[id] = info
+		}
+	}
+	return out, nil
+}
+
+type noopVideoLookup struct{}
+
+func (noopVideoLookup) Fetch(ctx context.Context, videoIDs []string) (map[string]liveinfo.VideoInfo, error) {
+	return map[string]liveinfo.VideoInfo{}, nil
 }
 
 type sseRecorder struct {
@@ -251,11 +292,3 @@ func (r *sseRecorder) WriteHeader(statusCode int) {
 }
 
 func (r *sseRecorder) Flush() {}
-
-func (f *fakeStatusClient) LiveStatus(ctx context.Context, videoID string) (api.LiveStatus, error) {
-	f.calls++
-	if status, ok := f.statuses[videoID]; ok {
-		return status, nil
-	}
-	return api.LiveStatus{}, fmt.Errorf("unknown video %s", videoID)
-}

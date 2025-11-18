@@ -8,6 +8,7 @@ import (
 
 	"live-stream-alerts/internal/logging"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
+	"live-stream-alerts/internal/platforms/youtube/liveinfo"
 	streamershandlers "live-stream-alerts/internal/streamers/handlers"
 	"live-stream-alerts/internal/ui"
 )
@@ -26,7 +27,7 @@ type Options struct {
 	Logger             logging.Logger
 	RuntimeInfo        RuntimeInfo
 	StreamersPath      string
-	AlertNotifications youtubehandlers.NotificationOptions
+	AlertNotifications youtubehandlers.AlertNotificationOptions
 }
 
 // NewRouter constructs the HTTP router for the public API.
@@ -62,7 +63,13 @@ func NewRouter(opts Options) http.Handler {
 	if alertsOpts.StreamersPath == "" {
 		alertsOpts.StreamersPath = streamersPath
 	}
-	mux.Handle("/alerts", handleAlerts(logger, streamersPath, alertsOpts))
+	if alertsOpts.VideoLookup == nil {
+		alertsOpts.VideoLookup = &liveinfo.Client{Logger: logger}
+	}
+
+	alertsHandler := handleAlerts(alertsOpts)
+	mux.Handle("/alerts", alertsHandler)
+	mux.Handle("/alert", alertsHandler)
 
 	mux.HandleFunc("/api/server/config", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, opts.RuntimeInfo)
@@ -82,10 +89,11 @@ func respondJSON(w http.ResponseWriter, payload any) {
 
 // handleAlerts returns an HTTP handler that only treats likely Google/YouTube
 // requests as WebSub subscription confirmations/notifications.
-func handleAlerts(logger logging.Logger, streamersPath string, notificationOpts youtubehandlers.NotificationOptions) http.Handler {
+func handleAlerts(notificationOpts youtubehandlers.AlertNotificationOptions) http.Handler {
 	allowedMethods := strings.Join([]string{http.MethodGet, http.MethodPost}, ", ")
+	logger := notificationOpts.Logger
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/alerts" {
+		if r.URL.Path != "/alerts" && r.URL.Path != "/alert" {
 			http.NotFound(w, r)
 			return
 		}
@@ -100,7 +108,7 @@ func handleAlerts(logger logging.Logger, streamersPath string, notificationOpts 
 			if platform == "youtube" {
 				if youtubehandlers.HandleSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
 					Logger:        logger,
-					StreamersPath: streamersPath,
+					StreamersPath: notificationOpts.StreamersPath,
 				}) {
 					return
 				}
@@ -121,11 +129,7 @@ func handleAlerts(logger logging.Logger, streamersPath string, notificationOpts 
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			opts := notificationOpts
-			if opts.Logger == nil {
-				opts.Logger = logger
-			}
-			if youtubehandlers.HandleNotification(w, r, opts) {
+			if youtubehandlers.HandleAlertNotification(w, r, notificationOpts) {
 				return
 			}
 			http.Error(w, "failed to process notification", http.StatusInternalServerError)
