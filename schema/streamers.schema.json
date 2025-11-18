@@ -337,10 +337,10 @@
           "maxLength": 128,
           "description": "Webhook secret used to verify YouTube notifications"
         },
-        "hubLeaseRenewalDue": {
+        "hubLeaseDate": {
           "type": "string",
           "format": "date-time",
-          "description": "Next time the WebSub lease must be renewed"
+          "description": "Timestamp when the WebSub lease was last verified"
         },
         "topic": {
           "type": "string",

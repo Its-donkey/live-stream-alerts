@@ -72,7 +72,7 @@ func TestHandleSubscriptionConfirmationSuccess(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatalf("expected one record")
 	}
-	if records[0].Platforms.YouTube.HubLeaseRenewalDue == "" {
+	if records[0].Platforms.YouTube.HubLeaseDate == "" {
 		t.Fatalf("expected lease renewal timestamp to be set")
 	}
 }
@@ -123,7 +123,7 @@ func TestHandleSubscriptionConfirmationSkipsLeaseForUnsubscribe(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatalf("expected one record")
 	}
-	if records[0].Platforms.YouTube.HubLeaseRenewalDue != "" {
+	if records[0].Platforms.YouTube.HubLeaseDate != "" {
 		t.Fatalf("expected lease renewal timestamp to remain empty for unsubscribe")
 	}
 }

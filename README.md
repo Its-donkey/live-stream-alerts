@@ -49,6 +49,9 @@ Omit any field to fall back to the defaults above. The legacy top-level keys (`h
 
 When `/alerts` receives a push notification, the server fetches the YouTube watch page for the referenced video, inspects its embedded metadata, and automatically updates the matching streamer record’s `status` when the notification corresponds to a live broadcast. No YouTube Data API key is required for this flow.
 
+### YouTube lease monitor
+The alert server continuously inspects `data/streamers.json` for YouTube subscriptions and automatically renews them when roughly 5% of the lease window remains. The renewal window is derived from `hubLeaseDate` (last hub confirmation) plus `leaseSeconds`, so keeping those fields current ensures subscriptions are re-upped before the hub expires them.
+
 ## API reference
 All HTTP routes are registered in `internal/api/v1/router.go`. Update the table below whenever an endpoint is added or altered so this README remains the single source of truth.
 

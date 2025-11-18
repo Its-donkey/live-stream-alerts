@@ -44,7 +44,7 @@
 
           "handle": { "type": "string", "description": "YouTube channel handle" },
           "channelId": { "type": "string", "description": "Canonical UC channel ID" },
-          "hubLeaseRenewalDue": { "type": "string", "format": "date-time" },
+          "hubLeaseDate": { "type": "string", "format": "date-time" },
 
           "pageId": { "type": "string", "description": "Facebook page identifier" },
 

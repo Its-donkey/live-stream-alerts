@@ -28,7 +28,7 @@ func RecordLease(path, channelID string, verifiedAt time.Time) error {
 				continue
 			}
 			if strings.EqualFold(yt.ChannelID, channelID) {
-				yt.HubLeaseRenewalDue = verifiedAt.UTC().Format(time.RFC3339)
+				yt.HubLeaseDate = verifiedAt.UTC().Format(time.RFC3339)
 				file.Records[i].UpdatedAt = time.Now().UTC()
 				return nil
 			}
