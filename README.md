@@ -7,7 +7,7 @@ A lightweight Go service that proxies YouTube WebSub subscriptions, stores strea
 - (Optional) `make` for your own helper scripts
 
 ## Running the alert server
-1. (Optional) Rebuild the embedded UI if you changed any files under the sibling `alGUI/` folder (the UI source lives alongside this repository):
+1. (Optional) Rebuild the embedded UI if you changed any files under the sibling `alGUI/` folder (the UI source lives alongside this repository; place it at `../alGUI` relative to this repo):
    ```bash
    go generate ./internal/ui
    ```
@@ -28,6 +28,26 @@ The WebSub defaults can be configured via environment variables or CLI flags (fl
 | `-youtube-lease-seconds` | `YOUTUBE_LEASE_SECONDS` | Lease duration requested during subscribe/unsubscribe. | `864000` |
 | `-youtube-default-mode` | `YOUTUBE_DEFAULT_MODE` | WebSub mode enforced when omitted (typically `subscribe`). | `subscribe` |
 | `-youtube-verify-mode` | `YOUTUBE_VERIFY_MODE` | Verification strategy requested (`sync` or `async`). | `async` |
+
+### `config.json`
+The binary also reads `config.json` on startup for file-based overrides. This is the best place to pin the HTTP listener address/port alongside the YouTube defaults:
+
+```json
+{
+  "server": {
+    "addr": "127.0.0.1",
+    "port": ":8880"
+  },
+  "youtube": {
+    "hub_url": "https://pubsubhubbub.appspot.com/subscribe",
+    "callback_url": "https://sharpen.live/alerts",
+    "lease_seconds": 864000,
+    "verify": "async"
+  }
+}
+```
+
+Omit any field to fall back to the defaults above. The legacy top-level keys (`hub_url`, `callback_url`, etc.) are still honored for backward compatibility, but nesting them under `youtube` keeps the file organized.
 
 ## API reference
 All HTTP routes are registered in `internal/api/v1/router.go`. Update the table below whenever an endpoint is added or altered so this README remains the single source of truth.
