@@ -118,6 +118,46 @@ func TestLeaseMonitorOnlyRenewsOncePerLease(t *testing.T) {
 	}
 }
 
+func TestLeaseMonitorStopWaitsForRenewals(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "streamers.json")
+	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	writeStreamersFile(t, path, start, 100)
+
+	renewStarted := make(chan struct{})
+	renewRelease := make(chan struct{})
+	cfg := LeaseMonitorConfig{
+		StreamersPath: path,
+		Interval:      10 * time.Millisecond,
+		RenewWindow:   0.05,
+		Options:       Options{},
+		Now: func() time.Time {
+			return start.Add(95 * time.Second)
+		},
+		Renew: func(ctx context.Context, record streamers.Record, opts Options) error {
+			select {
+			case <-renewStarted:
+			default:
+				close(renewStarted)
+			}
+			<-renewRelease
+			return ctx.Err()
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	monitor := StartLeaseMonitor(ctx, cfg)
+	t.Cleanup(func() { monitor.Stop() })
+
+	select {
+	case <-renewStarted:
+	case <-time.After(time.Second):
+		t.Fatalf("expected renewal to start")
+	}
+	cancel()
+	close(renewRelease)
+	monitor.Stop() // should wait for renewal goroutine to exit without panic.
+}
+
 func waitEvent(t *testing.T, ch <-chan struct{}) {
 	t.Helper()
 	select {

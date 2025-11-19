@@ -103,9 +103,6 @@ func Run(ctx context.Context, opts Options) error {
 		errCh <- srv.ListenAndServe()
 	}()
 
-	monitorCtx, cancelMonitor := context.WithCancel(ctx)
-	defer cancelMonitor()
-
 	monitorOpts := subscriptions.Options{
 		Client:       &http.Client{Timeout: 10 * time.Second},
 		HubURL:       appCfg.YouTube.HubURL,
@@ -114,23 +111,22 @@ func Run(ctx context.Context, opts Options) error {
 		Verify:       appCfg.YouTube.Verify,
 		LeaseSeconds: appCfg.YouTube.LeaseSeconds,
 	}
-	subscriptions.StartLeaseMonitor(monitorCtx, subscriptions.LeaseMonitorConfig{
+	monitor := subscriptions.StartLeaseMonitor(ctx, subscriptions.LeaseMonitorConfig{
 		StreamersPath: streamerStore.Path(),
 		Interval:      time.Minute,
 		Options:       monitorOpts,
 	})
+	defer monitor.Stop()
 
 	select {
 	case <-ctx.Done():
 		logger.Printf("Shutting down...")
-		cancelMonitor()
 		_ = srv.Close()
 		if err := <-errCh; err != nil {
 			return err
 		}
 		return nil
 	case err := <-errCh:
-		cancelMonitor()
 		if err != nil {
 			return err
 		}
