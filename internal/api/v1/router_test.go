@@ -12,10 +12,13 @@ import (
 	"testing"
 	"time"
 
+	"live-stream-alerts/config"
+	adminauth "live-stream-alerts/internal/admin/auth"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
 	"live-stream-alerts/internal/platforms/youtube/liveinfo"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 	"live-stream-alerts/internal/streamers"
+	"live-stream-alerts/internal/submissions"
 )
 
 type stubLogger struct {
@@ -26,12 +29,26 @@ func (s *stubLogger) Printf(format string, args ...any) {
 	s.entries = append(s.entries, format)
 }
 
+func testYouTubeConfig() config.YouTubeConfig {
+	return config.YouTubeConfig{
+		HubURL:       "https://hub.example.com",
+		CallbackURL:  "https://callback.example.com/alerts",
+		Verify:       "async",
+		LeaseSeconds: 60,
+	}
+}
+
 func TestNewRouterServesConfigAndRoot(t *testing.T) {
 	logger := &stubLogger{}
 	runtime := RuntimeInfo{Name: "app", Addr: "127.0.0.1", Port: ":1234", ReadTimeout: "1s"}
+	dir := t.TempDir()
 	router := NewRouter(Options{
-		Logger:      logger,
-		RuntimeInfo: runtime,
+		Logger:          logger,
+		RuntimeInfo:     runtime,
+		StreamersPath:   filepath.Join(dir, "streamers.json"),
+		SubmissionsPath: filepath.Join(dir, "submissions.json"),
+		AdminAuth:       adminauth.NewManager(adminauth.Config{Email: "admin@example.com", Password: "secret"}),
+		YouTube:         testYouTubeConfig(),
 		AlertNotifications: youtubehandlers.AlertNotificationOptions{
 			VideoLookup: noopVideoLookup{},
 		},
@@ -70,6 +87,83 @@ func TestNewRouterServesConfigAndRoot(t *testing.T) {
 	}
 }
 
+func TestAdminLoginRoute(t *testing.T) {
+	manager := adminauth.NewManager(adminauth.Config{Email: "admin@example.com", Password: "secret", TokenTTL: time.Minute})
+	dir := t.TempDir()
+	router := NewRouter(Options{
+		AdminAuth:       manager,
+		StreamersPath:   filepath.Join(dir, "streamers.json"),
+		SubmissionsPath: filepath.Join(dir, "submissions.json"),
+		YouTube:         testYouTubeConfig(),
+	})
+
+	body, _ := json.Marshal(map[string]string{"email": "admin@example.com", "password": "secret"})
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/login", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	var resp map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp["token"] == "" {
+		t.Fatalf("expected token in response")
+	}
+
+	badBody, _ := json.Marshal(map[string]string{"email": "admin@example.com", "password": "bad"})
+	badReq := httptest.NewRequest(http.MethodPost, "/api/admin/login", bytes.NewReader(badBody))
+	badRec := httptest.NewRecorder()
+	router.ServeHTTP(badRec, badReq)
+	if badRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for invalid creds, got %d", badRec.Code)
+	}
+}
+
+func TestAdminSubmissionsRoutes(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "submissions.json")
+	streamersPath := filepath.Join(dir, "streamers.json")
+	file := submissions.File{
+		Submissions: []submissions.Submission{
+			{ID: "1", Alias: "Pending", SubmittedAt: time.Now().UTC()},
+		},
+	}
+	data, _ := json.MarshalIndent(file, "", "  ")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write submissions file: %v", err)
+	}
+
+	manager := adminauth.NewManager(adminauth.Config{Email: "admin@example.com", Password: "secret"})
+	token, _ := manager.Login("admin@example.com", "secret")
+
+	router := NewRouter(Options{
+		AdminAuth:       manager,
+		SubmissionsPath: path,
+		StreamersPath:   streamersPath,
+		YouTube:         testYouTubeConfig(),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/submissions", nil)
+	req.Header.Set("Authorization", "Bearer "+token.Value)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	postBody, _ := json.Marshal(map[string]string{"action": "reject", "id": "1"})
+	postReq := httptest.NewRequest(http.MethodPost, "/api/admin/submissions", bytes.NewReader(postBody))
+	postReq.Header.Set("Authorization", "Bearer "+token.Value)
+	postRec := httptest.NewRecorder()
+	router.ServeHTTP(postRec, postReq)
+	if postRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 rejecting submission, got %d", postRec.Code)
+	}
+}
+
 func TestRespondJSONSetsContentType(t *testing.T) {
 	rr := httptest.NewRecorder()
 	respondJSON(rr, map[string]string{"key": "value"})
@@ -79,7 +173,7 @@ func TestRespondJSONSetsContentType(t *testing.T) {
 }
 
 func TestNewRouterWithoutLogger(t *testing.T) {
-	router := NewRouter(Options{})
+	router := NewRouter(Options{YouTube: testYouTubeConfig()})
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
@@ -102,6 +196,7 @@ func TestAlertsRouteHandlesVerification(t *testing.T) {
 		AlertNotifications: youtubehandlers.AlertNotificationOptions{
 			VideoLookup: noopVideoLookup{},
 		},
+		YouTube: testYouTubeConfig(),
 	})
 
 	token := "verify-token"
@@ -138,6 +233,7 @@ func TestAlertsRoutePostRequiresValidFeed(t *testing.T) {
 		AlertNotifications: youtubehandlers.AlertNotificationOptions{
 			VideoLookup: noopVideoLookup{},
 		},
+		YouTube: testYouTubeConfig(),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/alerts", strings.NewReader("not xml"))
 	rr := httptest.NewRecorder()
@@ -211,6 +307,7 @@ func TestAlertsRouteProcessesNotifications(t *testing.T) {
 			Logger:      logger,
 			VideoLookup: lookup,
 		},
+		YouTube: testYouTubeConfig(),
 	})
 
 	body := `<?xml version="1.0" encoding="UTF-8"?>

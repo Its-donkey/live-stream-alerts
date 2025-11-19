@@ -8,26 +8,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"live-stream-alerts/config"
 	"live-stream-alerts/internal/streamers"
+	"live-stream-alerts/internal/submissions"
 )
-
-func configureYouTubeDefaults(t *testing.T, hubURL string) {
-	t.Helper()
-	original := config.YT
-	config.YT = config.YouTubeConfig{
-		HubURL:       hubURL,
-		CallbackURL:  "https://callback.example.com/alerts",
-		LeaseSeconds: 60,
-		Mode:         "subscribe",
-		Verify:       "async",
-	}
-	t.Cleanup(func() { config.YT = original })
-}
 
 func TestStreamersHandlerGetListsStreamers(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "streamers.json")
+	submissionsPath := filepath.Join(dir, "submissions.json")
 	for _, alias := range []string{"One", "Two"} {
 		if _, err := streamers.Append(path, streamers.Record{
 			Streamer: streamers.Streamer{
@@ -41,7 +29,7 @@ func TestStreamersHandlerGetListsStreamers(t *testing.T) {
 		}
 	}
 
-	handler := StreamersHandler(StreamOptions{FilePath: path})
+	handler := StreamersHandler(StreamOptions{FilePath: path, SubmissionsPath: submissionsPath})
 	req := httptest.NewRequest(http.MethodGet, "/api/streamers", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -61,7 +49,11 @@ func TestStreamersHandlerGetListsStreamers(t *testing.T) {
 }
 
 func TestStreamersHandlerPostValidation(t *testing.T) {
-	handler := StreamersHandler(StreamOptions{FilePath: filepath.Join(t.TempDir(), "streamers.json")})
+	dir := t.TempDir()
+	handler := StreamersHandler(StreamOptions{
+		FilePath:        filepath.Join(dir, "streamers.json"),
+		SubmissionsPath: filepath.Join(dir, "submissions.json"),
+	})
 	req := httptest.NewRequest(http.MethodPost, "/api/streamers", bytes.NewBufferString("not json"))
 	rr := httptest.NewRecorder()
 
@@ -75,7 +67,8 @@ func TestStreamersHandlerPostValidation(t *testing.T) {
 func TestStreamersHandlerPostSuccess(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "streamers.json")
-	handler := StreamersHandler(StreamOptions{FilePath: path})
+	submissionsPath := filepath.Join(dir, "submissions.json")
+	handler := StreamersHandler(StreamOptions{FilePath: path, SubmissionsPath: submissionsPath})
 
 	payload := map[string]any{
 		"streamer": map[string]any{
@@ -94,36 +87,39 @@ func TestStreamersHandlerPostSuccess(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d", rr.Code)
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", rr.Code)
 	}
-	var record streamers.Record
-	if err := json.Unmarshal(rr.Body.Bytes(), &record); err != nil {
+	var resp map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if record.Streamer.Alias != "Test Alias" {
-		t.Fatalf("expected alias to be stored, got %q", record.Streamer.Alias)
+	if resp["status"] != "pending" {
+		t.Fatalf("expected pending status, got %q", resp["status"])
 	}
-	if id := record.Streamer.ID; len(id) != 32 {
-		t.Fatalf("expected generated 32 character ID, got %q", id)
+
+	pending, err := submissions.List(submissionsPath)
+	if err != nil {
+		t.Fatalf("list submissions: %v", err)
 	}
-	if len(record.Streamer.Languages) != 2 {
-		t.Fatalf("expected duplicate languages removed, got %v", record.Streamer.Languages)
+	if len(pending) != 1 || pending[0].Alias != "Test Alias" {
+		t.Fatalf("expected pending submission, got %+v", pending)
 	}
 
 	records, err := streamers.List(path)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(records) != 1 {
-		t.Fatalf("expected one record persisted, got %d", len(records))
+	if len(records) != 0 {
+		t.Fatalf("expected no streamers persisted yet, got %d", len(records))
 	}
 }
 
 func TestStreamersHandlerPostDuplicateAlias(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "streamers.json")
-	handler := StreamersHandler(StreamOptions{FilePath: path})
+	submissionsPath := filepath.Join(dir, "submissions.json")
+	handler := StreamersHandler(StreamOptions{FilePath: path, SubmissionsPath: submissionsPath})
 
 	first := map[string]any{
 		"streamer": map[string]any{
@@ -143,12 +139,19 @@ func TestStreamersHandlerPostDuplicateAlias(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/streamers", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
-		if idx == 0 && rr.Code != http.StatusCreated {
-			t.Fatalf("expected first record to succeed, got %d", rr.Code)
+		if idx == 0 && rr.Code != http.StatusAccepted {
+			t.Fatalf("expected first submission accepted, got %d", rr.Code)
 		}
 		if idx == 1 && rr.Code != http.StatusConflict {
 			t.Fatalf("expected duplicate alias to return 409, got %d", rr.Code)
 		}
+	}
+	pending, err := submissions.List(submissionsPath)
+	if err != nil {
+		t.Fatalf("list submissions: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("expected single pending submission, got %d", len(pending))
 	}
 }
 
@@ -167,7 +170,6 @@ func TestStreamersHandlerDeleteSuccess(t *testing.T) {
 		w.WriteHeader(http.StatusAccepted)
 	}))
 	defer hub.Close()
-	configureYouTubeDefaults(t, hub.URL)
 
 	record, err := streamers.Append(path, streamers.Record{
 		Streamer: streamers.Streamer{
@@ -179,8 +181,9 @@ func TestStreamersHandlerDeleteSuccess(t *testing.T) {
 		},
 		Platforms: streamers.Platforms{
 			YouTube: &streamers.YouTubePlatform{
-				ChannelID: "UC555",
-				HubSecret: "secret",
+				ChannelID:   "UC555",
+				HubSecret:   "secret",
+				CallbackURL: "https://callback.example.com/alerts",
 			},
 		},
 	})
@@ -189,9 +192,10 @@ func TestStreamersHandlerDeleteSuccess(t *testing.T) {
 	}
 
 	handler := StreamersHandler(StreamOptions{
-		FilePath:      path,
-		YouTubeClient: hub.Client(),
-		YouTubeHubURL: hub.URL,
+		FilePath:        path,
+		SubmissionsPath: filepath.Join(dir, "submissions.json"),
+		YouTubeClient:   hub.Client(),
+		YouTubeHubURL:   hub.URL,
 	})
 	payload := map[string]any{
 		"streamer": map[string]string{
@@ -231,7 +235,6 @@ func TestStreamersHandlerDeleteUnsubscribeFailure(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer hub.Close()
-	configureYouTubeDefaults(t, hub.URL)
 
 	record, err := streamers.Append(path, streamers.Record{
 		Streamer: streamers.Streamer{
@@ -243,8 +246,9 @@ func TestStreamersHandlerDeleteUnsubscribeFailure(t *testing.T) {
 		},
 		Platforms: streamers.Platforms{
 			YouTube: &streamers.YouTubePlatform{
-				ChannelID: "UCfail",
-				HubSecret: "secret",
+				ChannelID:   "UCfail",
+				HubSecret:   "secret",
+				CallbackURL: "https://callback.example.com/alerts",
 			},
 		},
 	})
@@ -253,9 +257,10 @@ func TestStreamersHandlerDeleteUnsubscribeFailure(t *testing.T) {
 	}
 
 	handler := StreamersHandler(StreamOptions{
-		FilePath:      path,
-		YouTubeClient: hub.Client(),
-		YouTubeHubURL: hub.URL,
+		FilePath:        path,
+		SubmissionsPath: filepath.Join(dir, "submissions.json"),
+		YouTubeClient:   hub.Client(),
+		YouTubeHubURL:   hub.URL,
 	})
 	body, _ := json.Marshal(map[string]any{
 		"streamer": map[string]any{
@@ -284,7 +289,7 @@ func TestStreamersHandlerDeleteUnsubscribeFailure(t *testing.T) {
 func TestStreamersHandlerDeleteValidations(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "streamers.json")
-	handler := StreamersHandler(StreamOptions{FilePath: path})
+	handler := StreamersHandler(StreamOptions{FilePath: path, SubmissionsPath: filepath.Join(dir, "submissions.json")})
 
 	t.Run("missing id", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodDelete, "/api/streamers", bytes.NewBufferString(`{"streamer":{"id":""}}`))
@@ -325,7 +330,7 @@ func TestStreamersHandlerPatch(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	handler := StreamersHandler(StreamOptions{FilePath: path})
+	handler := StreamersHandler(StreamOptions{FilePath: path, SubmissionsPath: filepath.Join(dir, "submissions.json")})
 
 	t.Run("success", func(t *testing.T) {
 		payload := map[string]any{
@@ -369,7 +374,8 @@ func TestStreamersHandlerPatch(t *testing.T) {
 }
 
 func TestStreamersHandlerMethodNotAllowed(t *testing.T) {
-	handler := StreamersHandler(StreamOptions{})
+	dir := t.TempDir()
+	handler := StreamersHandler(StreamOptions{SubmissionsPath: filepath.Join(dir, "submissions.json"), FilePath: filepath.Join(dir, "streamers.json")})
 	req := httptest.NewRequest(http.MethodPut, "/api/streamers", nil)
 	rr := httptest.NewRecorder()
 

@@ -1,17 +1,15 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"live-stream-alerts/internal/logging"
-	"live-stream-alerts/internal/platforms/youtube/onboarding"
 	"live-stream-alerts/internal/streamers"
+	"live-stream-alerts/internal/submissions"
 )
 
 type createRequest struct {
@@ -25,7 +23,7 @@ type createRequest struct {
 	} `json:"platforms"`
 }
 
-func createStreamer(w http.ResponseWriter, r *http.Request, path string, logger logging.Logger, youtubeClient *http.Client, youtubeHubURL string) {
+func createStreamer(w http.ResponseWriter, r *http.Request, streamersPath, submissionsPath string, logger logging.Logger) {
 	defer r.Body.Close()
 	var req createRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -39,40 +37,38 @@ func createStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 		return
 	}
 
-	record, err = streamers.Append(path, record)
-	if err != nil {
-		if errors.Is(err, streamers.ErrDuplicateStreamerID) || errors.Is(err, streamers.ErrDuplicateAlias) {
-			http.Error(w, "a streamer with that alias already exists", http.StatusConflict)
+	if err := ensureUniqueAlias(streamersPath, submissionsPath, record.Streamer.Alias); err != nil {
+		if errors.Is(err, errDuplicateAlias) {
+			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
 		if logger != nil {
-			logger.Printf("failed to append streamer: %v", err)
+			logger.Printf("alias check failed: %v", err)
 		}
-		http.Error(w, "failed to persist streamer", http.StatusInternalServerError)
+		http.Error(w, "failed to queue submission", http.StatusInternalServerError)
+		return
+	}
+
+	submission := submissions.Submission{
+		Alias:       record.Streamer.Alias,
+		Description: record.Streamer.Description,
+		Languages:   record.Streamer.Languages,
+		PlatformURL: strings.TrimSpace(req.Platforms.URL),
+	}
+	if _, err := submissions.Append(submissionsPath, submission); err != nil {
+		if logger != nil {
+			logger.Printf("failed to queue submission: %v", err)
+		}
+		http.Error(w, "failed to queue submission", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(record)
-
-	channelURL := strings.TrimSpace(req.Platforms.URL)
-	if channelURL == "" {
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
-	defer cancel()
-
-	onboardOpts := onboarding.Options{
-		Client:        youtubeClient,
-		HubURL:        youtubeHubURL,
-		Logger:        logger,
-		StreamersPath: path,
-	}
-	if err := onboarding.FromURL(ctx, record, channelURL, onboardOpts); err != nil && logger != nil {
-		logger.Printf("failed to process YouTube URL for %s: %v", record.Streamer.Alias, err)
-	}
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status":  "pending",
+		"message": "Submission received and pending approval.",
+	})
 }
 
 func buildRecord(req createRequest) (streamers.Record, error) {
@@ -212,3 +208,33 @@ var allowedLanguagesSet = func() map[string]struct{} {
 	}
 	return set
 }()
+
+var errDuplicateAlias = fmt.Errorf("a streamer with that alias already exists")
+
+func ensureUniqueAlias(streamersPath, submissionsPath, alias string) error {
+	key := streamers.NormaliseAlias(alias)
+	if key == "" {
+		return nil
+	}
+
+	records, err := streamers.List(streamersPath)
+	if err != nil {
+		return err
+	}
+	for _, rec := range records {
+		if key == streamers.NormaliseAlias(rec.Streamer.Alias) {
+			return errDuplicateAlias
+		}
+	}
+
+	pending, err := submissions.List(submissionsPath)
+	if err != nil {
+		return err
+	}
+	for _, sub := range pending {
+		if key == streamers.NormaliseAlias(sub.Alias) {
+			return errDuplicateAlias
+		}
+	}
+	return nil
+}

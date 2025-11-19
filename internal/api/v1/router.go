@@ -7,10 +7,15 @@ import (
 	"strings"
 	"time"
 
+	"live-stream-alerts/config"
+	adminauth "live-stream-alerts/internal/admin/auth"
+	adminhttp "live-stream-alerts/internal/admin/http"
 	"live-stream-alerts/internal/logging"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
 	"live-stream-alerts/internal/platforms/youtube/liveinfo"
+	"live-stream-alerts/internal/streamers"
 	streamershandlers "live-stream-alerts/internal/streamers/handlers"
+	"live-stream-alerts/internal/submissions"
 )
 
 const rootPlaceholder = "UI assets not configured. Run the standalone alGUI project separately.\n"
@@ -29,6 +34,9 @@ type Options struct {
 	Logger             logging.Logger
 	RuntimeInfo        RuntimeInfo
 	StreamersPath      string
+	SubmissionsPath    string
+	AdminAuth          *adminauth.Manager
+	YouTube            config.YouTubeConfig
 	AlertNotifications youtubehandlers.AlertNotificationOptions
 }
 
@@ -37,20 +45,32 @@ func NewRouter(opts Options) http.Handler {
 	mux := http.NewServeMux()
 	logger := opts.Logger
 	streamersPath := opts.StreamersPath
+	if streamersPath == "" {
+		streamersPath = streamers.DefaultFilePath
+	}
+	submissionsPath := opts.SubmissionsPath
+	if submissionsPath == "" {
+		submissionsPath = submissions.DefaultFilePath
+	}
 
 	streamersHandler := streamershandlers.StreamersHandler(streamershandlers.StreamOptions{
-		Logger:   logger,
-		FilePath: streamersPath,
+		Logger:          logger,
+		FilePath:        streamersPath,
+		SubmissionsPath: submissionsPath,
+		YouTubeHubURL:   strings.TrimSpace(opts.YouTube.HubURL),
 	})
 
 	mux.Handle("/api/youtube/channel", youtubehandlers.NewChannelLookupHandler(nil))
 	mux.Handle("/api/youtube/metadata", youtubehandlers.NewMetadataHandler(youtubehandlers.MetadataHandlerOptions{}))
-	mux.Handle("/api/youtube/subscribe", youtubehandlers.NewSubscribeHandler(youtubehandlers.SubscribeHandlerOptions{
-		Logger: logger,
-	}))
-	mux.Handle("/api/youtube/unsubscribe", youtubehandlers.NewUnsubscribeHandler(youtubehandlers.UnsubscribeHandlerOptions{
-		Logger: logger,
-	}))
+	commonSubOpts := youtubehandlers.SubscriptionHandlerOptions{
+		Logger:       logger,
+		HubURL:       strings.TrimSpace(opts.YouTube.HubURL),
+		CallbackURL:  strings.TrimSpace(opts.YouTube.CallbackURL),
+		VerifyMode:   strings.TrimSpace(opts.YouTube.Verify),
+		LeaseSeconds: opts.YouTube.LeaseSeconds,
+	}
+	mux.Handle("/api/youtube/subscribe", youtubehandlers.NewSubscribeHandler(commonSubOpts))
+	mux.Handle("/api/youtube/unsubscribe", youtubehandlers.NewUnsubscribeHandler(commonSubOpts))
 	mux.Handle("/api/streamers", streamersHandler)
 	mux.Handle("/api/streamers/watch", streamersWatchHandler(streamersWatchOptions{
 		FilePath:     streamersPath,
@@ -72,6 +92,17 @@ func NewRouter(opts Options) http.Handler {
 	alertsHandler := handleAlerts(alertsOpts)
 	mux.Handle("/alerts", alertsHandler)
 	mux.Handle("/alert", alertsHandler)
+
+	if opts.AdminAuth != nil {
+		mux.Handle("/api/admin/login", adminhttp.NewLoginHandler(opts.AdminAuth))
+		mux.Handle("/api/admin/submissions", adminhttp.NewSubmissionsHandler(adminhttp.SubmissionsHandlerOptions{
+			Manager:       opts.AdminAuth,
+			FilePath:      submissionsPath,
+			StreamersPath: streamersPath,
+			Logger:        logger,
+			YouTube:       opts.YouTube,
+		}))
+	}
 
 	mux.HandleFunc("/api/server/config", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, opts.RuntimeInfo)

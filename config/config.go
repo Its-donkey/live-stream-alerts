@@ -3,7 +3,7 @@ package config
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 	"os"
 )
 
@@ -27,16 +27,19 @@ type ServerConfig struct {
 	Port string `json:"port"`
 }
 
+// AdminConfig stores credentials for admin-authenticated APIs.
+type AdminConfig struct {
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	TokenTTLSeconds int    `json:"token_ttl_seconds"`
+}
+
 // Config represents the combined runtime settings parsed from config.json.
 type Config struct {
 	Server  ServerConfig
 	YouTube YouTubeConfig
+	Admin   AdminConfig
 }
-
-var (
-	YT     YouTubeConfig
-	Server ServerConfig
-)
 
 type fileConfig struct {
 	ServerBlock  *ServerConfig  `json:"server"`
@@ -44,18 +47,19 @@ type fileConfig struct {
 	Port         string         `json:"port"`
 	YouTubeBlock *YouTubeConfig `json:"youtube"`
 	YouTubeConfig
+	AdminBlock *AdminConfig `json:"admin"`
+	AdminConfig
 }
 
-// MustLoad reads the JSON config at the given path, populates global defaults,
-// and returns the parsed config structure.
-func MustLoad(path string) Config {
+// Load reads the JSON config at the given path and returns the parsed structure.
+func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		log.Fatal(err)
+		return Config{}, fmt.Errorf("read config: %w", err)
 	}
 	var raw fileConfig
 	if err := json.Unmarshal(data, &raw); err != nil {
-		log.Fatal(err)
+		return Config{}, fmt.Errorf("decode config: %w", err)
 	}
 
 	yt := raw.YouTubeConfig
@@ -83,12 +87,28 @@ func MustLoad(path string) Config {
 		server.Port = defaultPort
 	}
 
+	admin := raw.AdminConfig
+	if raw.AdminBlock != nil {
+		admin = *raw.AdminBlock
+	}
+	if admin.TokenTTLSeconds <= 0 {
+		admin.TokenTTLSeconds = 86400
+	}
+
 	cfg := Config{
 		Server:  server,
 		YouTube: yt,
+		Admin:   admin,
 	}
 
-	YT = cfg.YouTube
-	Server = cfg.Server
+	return cfg, nil
+}
+
+// MustLoad is a convenience wrapper around Load that panics on error.
+func MustLoad(path string) Config {
+	cfg, err := Load(path)
+	if err != nil {
+		panic(err)
+	}
 	return cfg
 }

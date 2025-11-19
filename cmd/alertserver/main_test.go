@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"live-stream-alerts/config"
 	apiv1 "live-stream-alerts/internal/api/v1"
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/streamers"
@@ -14,6 +15,12 @@ func TestRouterConstructionMatchesMainConfig(t *testing.T) {
 	opts := apiv1.Options{
 		Logger:        logger,
 		StreamersPath: streamers.DefaultFilePath,
+		YouTube: config.YouTubeConfig{
+			HubURL:       "https://hub.example.com",
+			CallbackURL:  "https://callback.example.com/alerts",
+			Verify:       "async",
+			LeaseSeconds: 60,
+		},
 		RuntimeInfo: apiv1.RuntimeInfo{
 			Name:        "live-stream-alerts",
 			Addr:        "127.0.0.1",

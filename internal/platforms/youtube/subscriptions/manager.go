@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 
-	"live-stream-alerts/config"
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 	"live-stream-alerts/internal/streamers"
@@ -102,9 +101,6 @@ func ManageSubscription(ctx context.Context, record streamers.Record, opts Optio
 		verify = strings.TrimSpace(opts.Verify)
 	}
 	if verify == "" {
-		verify = strings.TrimSpace(config.YT.Verify)
-	}
-	if verify == "" {
 		verify = "async"
 	}
 	leaseSeconds := resolveLeaseSeconds(mode, yt, opts)
@@ -166,5 +162,5 @@ func resolveLeaseSeconds(mode string, yt *streamers.YouTubePlatform, opts Option
 	if opts.LeaseSeconds > 0 {
 		return opts.LeaseSeconds
 	}
-	return config.YT.LeaseSeconds
+	return 0
 }

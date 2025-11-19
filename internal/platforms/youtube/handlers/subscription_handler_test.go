@@ -9,21 +9,15 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"live-stream-alerts/config"
 )
 
-func configureSubscriptionDefaults(t *testing.T) {
-	t.Helper()
-	original := config.YT
-	config.YT = config.YouTubeConfig{
+func defaultSubscriptionOptions() SubscriptionHandlerOptions {
+	return SubscriptionHandlerOptions{
 		HubURL:       "https://hub.example.com/subscribe",
 		CallbackURL:  "https://callback.example.com/alerts",
+		VerifyMode:   "async",
 		LeaseSeconds: 60,
-		Mode:         "subscribe",
-		Verify:       "async",
 	}
-	t.Cleanup(func() { config.YT = original })
 }
 
 type stubRoundTrip func(*http.Request) (*http.Response, error)
@@ -33,9 +27,7 @@ func (s stubRoundTrip) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func TestSubscriptionHandlerReturnsBadRequestForValidationErrors(t *testing.T) {
-	configureSubscriptionDefaults(t)
-
-	handler := NewUnsubscribeHandler(UnsubscribeHandlerOptions{})
+	handler := NewUnsubscribeHandler(defaultSubscriptionOptions())
 	body, _ := json.Marshal(map[string]string{
 		"topic": "",
 	})
@@ -53,13 +45,13 @@ func TestSubscriptionHandlerReturnsBadRequestForValidationErrors(t *testing.T) {
 }
 
 func TestSubscriptionHandlerReturnsBadGatewayForHubFailures(t *testing.T) {
-	configureSubscriptionDefaults(t)
-
 	client := &http.Client{Transport: stubRoundTrip(func(req *http.Request) (*http.Response, error) {
 		return nil, errors.New("dial tcp: i/o timeout")
 	})}
 
-	handler := NewSubscribeHandler(SubscribeHandlerOptions{Client: client})
+	opts := defaultSubscriptionOptions()
+	opts.Client = client
+	handler := NewSubscribeHandler(opts)
 	body, _ := json.Marshal(map[string]string{
 		"topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC123",
 	})
@@ -77,8 +69,6 @@ func TestSubscriptionHandlerReturnsBadGatewayForHubFailures(t *testing.T) {
 }
 
 func TestUnsubscribeHandlerDoesNotSetLeaseSeconds(t *testing.T) {
-	configureSubscriptionDefaults(t)
-
 	var leaseParam string
 	client := &http.Client{Transport: stubRoundTrip(func(req *http.Request) (*http.Response, error) {
 		if err := req.ParseForm(); err != nil {
@@ -93,7 +83,9 @@ func TestUnsubscribeHandlerDoesNotSetLeaseSeconds(t *testing.T) {
 		return resp, nil
 	})}
 
-	handler := NewUnsubscribeHandler(UnsubscribeHandlerOptions{Client: client})
+	opts := defaultSubscriptionOptions()
+	opts.Client = client
+	handler := NewUnsubscribeHandler(opts)
 	body, _ := json.Marshal(map[string]string{
 		"topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC123",
 	})
