@@ -22,8 +22,10 @@ var (
 
 // Store persists submissions to disk behind a per-path mutex.
 type Store struct {
-	path string
-	mu   sync.Mutex
+	path        string
+	mu          sync.Mutex
+	now         func() time.Time
+	idGenerator func() string
 }
 
 var storeCache sync.Map
@@ -45,12 +47,41 @@ type Submission struct {
 	SubmittedBy string    `json:"submittedBy,omitempty"`
 }
 
+// StoreOption customises the store behaviour.
+type StoreOption func(*Store)
+
+// WithNow allows tests to override the clock used when populating SubmittedAt.
+func WithNow(fn func() time.Time) StoreOption {
+	return func(s *Store) {
+		if fn != nil {
+			s.now = fn
+		}
+	}
+}
+
+// WithIDGenerator overrides how submission IDs are generated when Append is called.
+func WithIDGenerator(fn func() string) StoreOption {
+	return func(s *Store) {
+		if fn != nil {
+			s.idGenerator = fn
+		}
+	}
+}
+
 // NewStore returns a file-backed submissions store for the provided path.
-func NewStore(path string) *Store {
+func NewStore(path string, opts ...StoreOption) *Store {
 	if path == "" {
 		path = DefaultFilePath
 	}
-	return &Store{path: filepath.Clean(path)}
+	store := &Store{
+		path:        filepath.Clean(path),
+		now:         time.Now,
+		idGenerator: defaultSubmissionID,
+	}
+	for _, opt := range opts {
+		opt(store)
+	}
+	return store
 }
 
 // Path returns the path backing the store.
@@ -150,16 +181,20 @@ func (s *Store) Append(submission Submission) (Submission, error) {
 	}
 	copy := submission
 	if copy.ID == "" {
-		copy.ID = fmt.Sprintf("sub_%d", time.Now().UnixNano())
+		copy.ID = s.idGenerator()
 	}
 	if copy.SubmittedAt.IsZero() {
-		copy.SubmittedAt = time.Now().UTC()
+		copy.SubmittedAt = s.now().UTC()
 	}
 	file.Submissions = append(file.Submissions, copy)
 	if err := s.writeFileLocked(file); err != nil {
 		return Submission{}, err
 	}
 	return copy, nil
+}
+
+func defaultSubmissionID() string {
+	return fmt.Sprintf("sub_%d", time.Now().UnixNano())
 }
 
 // Append stores a submission using a shared store derived from the provided path.

@@ -11,7 +11,11 @@ import (
 
 func TestStoreAppendPopulatesDefaults(t *testing.T) {
 	dir := t.TempDir()
-	store := submissions.NewStore(filepath.Join(dir, "subs.json"))
+	fixed := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	store := submissions.NewStore(
+		filepath.Join(dir, "subs.json"),
+		submissions.WithNow(func() time.Time { return fixed }),
+	)
 
 	saved, err := store.Append(submissions.Submission{Alias: "Example"})
 	if err != nil {
@@ -20,8 +24,8 @@ func TestStoreAppendPopulatesDefaults(t *testing.T) {
 	if saved.ID == "" {
 		t.Fatalf("expected ID to be generated")
 	}
-	if saved.SubmittedAt.IsZero() {
-		t.Fatalf("expected SubmittedAt to be populated")
+	if !saved.SubmittedAt.Equal(fixed) {
+		t.Fatalf("expected SubmittedAt to use injected clock, got %s", saved.SubmittedAt)
 	}
 
 	list, err := store.List()
@@ -95,5 +99,20 @@ func TestNewStoreCreatesDefaultPathWhenEmpty(t *testing.T) {
 	defer func() { _ = os.Remove(store.Path()) }()
 	if _, err := store.Append(submissions.Submission{Alias: "Test"}); err != nil {
 		t.Fatalf("append: %v", err)
+	}
+}
+
+func TestStoreUsesInjectedIDGenerator(t *testing.T) {
+	dir := t.TempDir()
+	store := submissions.NewStore(
+		filepath.Join(dir, "subs.json"),
+		submissions.WithIDGenerator(func() string { return "fixed-id" }),
+	)
+	saved, err := store.Append(submissions.Submission{Alias: "Example"})
+	if err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if saved.ID != "fixed-id" {
+		t.Fatalf("expected injected ID generator to run, got %s", saved.ID)
 	}
 }
