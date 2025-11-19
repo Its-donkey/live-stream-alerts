@@ -41,6 +41,7 @@
 - Sanitized the WebSub notification handler logging so Atom parse errors are not logged (clients just get 400) and upstream fetch errors are logged only when informative, preventing noisy logs.
 - Lease monitor now exposes `Stop()` and waits for renewal goroutines before exiting, letting the app tie the background YouTube subscription refresh loop to the server lifecycle cleanly.
 - Submissions store now accepts injected clocks/ID generators so tests can deterministically assert `SubmittedAt` and ID values without relying on real time.
+- Split the WebSub notification handler into a dedicated `service.AlertProcessor`, keeping the HTTP layer focused on method/path/response mapping while business logic (feed parsing, lookups, live-status updates) lives in the service with targeted tests.
 - Reworked configuration/state wiring so YouTube hub/callback/verify/lease settings are injected through `internal/api/v1`, onboarding, admin submissions, and subscription clients instead of relying on the old `config.YT` globals.
 - Removed the embedded alGUI assets/handler so the alert server stays API-only, returning a placeholder at `/` and keeping the UI’s traffic out of alert-server logs.
 - Allowed `streamer.firstName`, `streamer.lastName`, and `streamer.email` fields to be blank in the JSON schema so optional contact details no longer trigger validation errors.

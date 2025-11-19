@@ -6,70 +6,33 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
-	"time"
 
-	"live-stream-alerts/internal/platforms/youtube/liveinfo"
-	"live-stream-alerts/internal/streamers"
+	youtubeservice "live-stream-alerts/internal/platforms/youtube/service"
 )
 
-type stubVideoLookup struct {
-	infos map[string]liveinfo.VideoInfo
-	err   error
-	calls int
+type stubAlertProcessor struct {
+	result youtubeservice.AlertProcessResult
+	err    error
+	calls  int
 }
 
-func (s *stubVideoLookup) Fetch(ctx context.Context, videoIDs []string) (map[string]liveinfo.VideoInfo, error) {
+func (s *stubAlertProcessor) Process(ctx context.Context, req youtubeservice.AlertProcessRequest) (youtubeservice.AlertProcessResult, error) {
 	s.calls++
-	if s.err != nil {
-		return nil, s.err
-	}
-	return s.infos, nil
+	return s.result, s.err
 }
 
-func TestHandleAlertNotificationUpdatesStatus(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "streamers.json")
-	store := streamers.NewStore(path)
-	_, err := store.Append(streamers.Record{
-		Streamer: streamers.Streamer{Alias: "Test"},
-		Platforms: streamers.Platforms{
-			YouTube: &streamers.YouTubePlatform{ChannelID: "UCdemo"},
+func TestHandleAlertNotificationDelegatesToProcessor(t *testing.T) {
+	stub := &stubAlertProcessor{
+		result: youtubeservice.AlertProcessResult{
+			Entries:     1,
+			VideoIDs:    []string{"abc123"},
+			LiveUpdates: []youtubeservice.LiveUpdate{{ChannelID: "UCdemo", VideoID: "abc123"}},
 		},
-	})
-	if err != nil {
-		t.Fatalf("append: %v", err)
 	}
-
-	body := `<?xml version='1.0' encoding='UTF-8'?>
-<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns="http://www.w3.org/2005/Atom">
- <entry>
-  <yt:videoId>fbfHCxvsny0</yt:videoId>
-  <yt:channelId>UCdemo</yt:channelId>
-  <title>Testing 1234</title>
-  <published>2025-11-16T09:02:38+00:00</published>
-  <updated>2025-11-16T09:02:41+00:00</updated>
- </entry>
-</feed>`
-
-	req := httptest.NewRequest(http.MethodPost, "/alerts", bytes.NewBufferString(body))
+	opts := AlertNotificationOptions{Processor: stub}
+	req := httptest.NewRequest(http.MethodPost, "/alerts", bytes.NewBufferString("<feed/>"))
 	rr := httptest.NewRecorder()
-	started := time.Date(2025, 11, 16, 9, 2, 41, 0, time.UTC)
-	lookup := &stubVideoLookup{
-		infos: map[string]liveinfo.VideoInfo{
-			"fbfHCxvsny0": {
-				ID:                   "fbfHCxvsny0",
-				ChannelID:            "UCdemo",
-				LiveBroadcastContent: "live",
-				ActualStartTime:      started,
-			},
-		},
-	}
-	opts := AlertNotificationOptions{
-		StreamersStore: store,
-		VideoLookup:    lookup,
-	}
 
 	if !HandleAlertNotification(rr, req, opts) {
 		t.Fatalf("expected handler to process request")
@@ -77,69 +40,61 @@ func TestHandleAlertNotificationUpdatesStatus(t *testing.T) {
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d", rr.Code)
 	}
-	if lookup.calls != 1 {
-		t.Fatalf("expected lookup to be called once, got %d", lookup.calls)
-	}
-
-	records, err := store.List()
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
-	if len(records) != 1 || !records[0].Status.Live {
-		t.Fatalf("expected live status to be set")
-	}
-	if records[0].Status.YouTube == nil || records[0].Status.YouTube.VideoID != "fbfHCxvsny0" {
-		t.Fatalf("expected youtube status to be populated")
+	if stub.calls != 1 {
+		t.Fatalf("expected processor to be called once, got %d", stub.calls)
 	}
 }
 
-func TestHandleAlertNotificationRejectsInvalidFeed(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/alerts", bytes.NewBufferString("not xml"))
+func TestHandleAlertNotificationHandlesInvalidFeedError(t *testing.T) {
+	stub := &stubAlertProcessor{err: youtubeservice.ErrInvalidFeed}
+	opts := AlertNotificationOptions{Processor: stub}
+	req := httptest.NewRequest(http.MethodPost, "/alerts", bytes.NewBufferString("payload"))
 	rr := httptest.NewRecorder()
-	opts := AlertNotificationOptions{
-		VideoLookup:    &stubVideoLookup{},
-		StreamersStore: streamers.NewStore(filepath.Join(t.TempDir(), "streamers.json")),
-	}
 
 	if !HandleAlertNotification(rr, req, opts) {
-		t.Fatalf("expected handler to run")
+		t.Fatalf("expected handler to process request")
 	}
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
 	}
 }
 
-func TestHandleAlertNotificationHandlesLookupFailure(t *testing.T) {
-	body := `<?xml version='1.0' encoding='UTF-8'?>
-<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns="http://www.w3.org/2005/Atom">
- <entry>
-  <yt:videoId>abc123</yt:videoId>
-  <yt:channelId>UCdemo</yt:channelId>
-  <title>Test</title>
- </entry>
-</feed>`
-	req := httptest.NewRequest(http.MethodPost, "/alerts", bytes.NewBufferString(body))
-	rr := httptest.NewRecorder()
-	opts := AlertNotificationOptions{
-		VideoLookup:    &stubVideoLookup{err: errors.New("lookup failed")},
-		StreamersStore: streamers.NewStore(filepath.Join(t.TempDir(), "streamers.json")),
+func TestHandleAlertNotificationHandlesLookupError(t *testing.T) {
+	stub := &stubAlertProcessor{
+		err: youtubeservice.ErrLookupFailed,
+		result: youtubeservice.AlertProcessResult{
+			VideoIDs: []string{"abc123"},
+		},
 	}
+	opts := AlertNotificationOptions{Processor: stub}
+	req := httptest.NewRequest(http.MethodPost, "/alerts", bytes.NewBufferString("payload"))
+	rr := httptest.NewRecorder()
 
 	if !HandleAlertNotification(rr, req, opts) {
-		t.Fatalf("expected handler to run")
+		t.Fatalf("expected handler to process request")
 	}
 	if rr.Code != http.StatusAccepted {
-		t.Fatalf("expected 202 when lookup fails, got %d", rr.Code)
+		t.Fatalf("expected 202, got %d", rr.Code)
+	}
+}
+
+func TestHandleAlertNotificationHandlesUnknownError(t *testing.T) {
+	stub := &stubAlertProcessor{err: errors.New("boom")}
+	opts := AlertNotificationOptions{Processor: stub}
+	req := httptest.NewRequest(http.MethodPost, "/alerts", bytes.NewBufferString("payload"))
+	rr := httptest.NewRecorder()
+
+	if !HandleAlertNotification(rr, req, opts) {
+		t.Fatalf("expected handler to process request")
+	}
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rr.Code)
 	}
 }
 
 func TestHandleAlertNotificationSkipsUnsupportedPaths(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/other", nil)
-	opts := AlertNotificationOptions{
-		VideoLookup:    &stubVideoLookup{},
-		StreamersStore: streamers.NewStore(filepath.Join(t.TempDir(), "streamers.json")),
-	}
-	if HandleAlertNotification(httptest.NewRecorder(), req, opts) {
+	if HandleAlertNotification(httptest.NewRecorder(), req, AlertNotificationOptions{}) {
 		t.Fatalf("expected handler to ignore unsupported paths")
 	}
 }
