@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -43,9 +44,6 @@ func HandleAlertNotification(w http.ResponseWriter, r *http.Request, opts AlertN
 	var feed youtubeFeed
 	decoder := xml.NewDecoder(io.LimitReader(r.Body, 1<<20))
 	if err := decoder.Decode(&feed); err != nil {
-		if opts.Logger != nil {
-			opts.Logger.Printf("failed to decode hub notification from %s: %v", r.RemoteAddr, err)
-		}
 		http.Error(w, "invalid atom feed", http.StatusBadRequest)
 		return true
 	}
@@ -67,7 +65,7 @@ func HandleAlertNotification(w http.ResponseWriter, r *http.Request, opts AlertN
 
 	videoInfo, err := opts.VideoLookup.Fetch(ctx, videoIDs)
 	if err != nil {
-		if opts.Logger != nil {
+		if opts.Logger != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 			opts.Logger.Printf("failed to fetch live metadata for videos %s: %v", strings.Join(videoIDs, ","), err)
 		}
 		w.WriteHeader(http.StatusAccepted)
