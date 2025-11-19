@@ -2,42 +2,29 @@ package adminhttp_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"live-stream-alerts/config"
-	adminauth "live-stream-alerts/internal/admin/auth"
 	adminhttp "live-stream-alerts/internal/admin/http"
+	adminservice "live-stream-alerts/internal/admin/service"
 	"live-stream-alerts/internal/streamers"
 	"live-stream-alerts/internal/submissions"
 )
 
 func TestSubmissionsHandlerList(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "submissions.json")
-	data := submissions.File{Submissions: []submissions.Submission{
-		{ID: "1", Alias: "Test", SubmittedAt: time.Now().UTC()},
-	}}
-	writeSubmissionsFile(t, path, data)
-	submissionsStore := submissions.NewStore(path)
-	streamersStore := streamers.NewStore(filepath.Join(dir, "streamers.json"))
-
-	mgr := adminauth.NewManager(adminauth.Config{Email: "admin@example.com", Password: "secret"})
-	token, _ := mgr.Login("admin@example.com", "secret")
-
+	svc := &stubSubmissionsService{
+		list: []submissions.Submission{{ID: "1", Alias: "Test", SubmittedAt: time.Now()}},
+	}
 	handler := adminhttp.NewSubmissionsHandler(adminhttp.SubmissionsHandlerOptions{
-		Manager:          mgr,
-		SubmissionsStore: submissionsStore,
-		StreamersStore:   streamersStore,
-		YouTube:          testAdminYouTubeConfig(),
+		Authorizer: &stubAuthorizer{},
+		Service:    svc,
 	})
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/submissions", nil)
-	req.Header.Set("Authorization", "Bearer "+token.Value)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -49,80 +36,107 @@ func TestSubmissionsHandlerList(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	if len(resp["submissions"]) != 1 {
-		t.Fatalf("expected one submission, got %d", len(resp["submissions"]))
+		t.Fatalf("expected 1 submission, got %d", len(resp["submissions"]))
+	}
+}
+
+func TestSubmissionsHandlerUnauthorized(t *testing.T) {
+	handler := adminhttp.NewSubmissionsHandler(adminhttp.SubmissionsHandlerOptions{
+		Authorizer: &stubAuthorizer{err: errors.New("nope")},
+		Service:    &stubSubmissionsService{},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/submissions", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rr.Code)
 	}
 }
 
 func TestSubmissionsHandlerApprove(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "submissions.json")
-	data := submissions.File{Submissions: []submissions.Submission{
-		{ID: "1", Alias: "Test", SubmittedAt: time.Now().UTC()},
-	}}
-writeSubmissionsFile(t, path, data)
-
-mgr := adminauth.NewManager(adminauth.Config{Email: "admin@example.com", Password: "secret"})
-token, _ := mgr.Login("admin@example.com", "secret")
-streamersPath := filepath.Join(dir, "streamers.json")
-submissionsStore := submissions.NewStore(path)
-streamersStore := streamers.NewStore(streamersPath)
+	svc := &stubSubmissionsService{
+		result: adminservice.ActionResult{
+			Status:     adminservice.ActionApprove,
+			Submission: submissions.Submission{ID: "1"},
+		},
+	}
 	handler := adminhttp.NewSubmissionsHandler(adminhttp.SubmissionsHandlerOptions{
-		Manager:          mgr,
-		SubmissionsStore: submissionsStore,
-		StreamersStore:   streamersStore,
-		YouTube:          testAdminYouTubeConfig(),
+		Authorizer: &stubAuthorizer{},
+		Service:    svc,
 	})
-
 	body, _ := json.Marshal(map[string]string{"action": "approve", "id": "1"})
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/submissions", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+token.Value)
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
+	if svc.received.Action != adminservice.ActionApprove || svc.received.ID != "1" {
+		t.Fatalf("service received wrong request: %+v", svc.received)
+	}
 	var resp map[string]any
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if resp["status"].(string) != "approved" {
-		t.Fatalf("expected status approved, got %v", resp["status"])
-	}
-
-	remaining, err := submissionsStore.List()
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
-	if len(remaining) != 0 {
-		t.Fatalf("expected submissions cleared, got %d", len(remaining))
-	}
-
-	records, err := streamersStore.List()
-	if err != nil {
-		t.Fatalf("list streamers: %v", err)
-	}
-	if len(records) != 1 || records[0].Streamer.Alias != "Test" {
-		t.Fatalf("expected streamer appended on approval, got %+v", records)
+	if resp["status"] != string(adminservice.ActionApprove) {
+		t.Fatalf("expected approve status, got %v", resp["status"])
 	}
 }
 
-func writeSubmissionsFile(t *testing.T, path string, file submissions.File) {
-	t.Helper()
-	data, err := json.MarshalIndent(file, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
+func TestSubmissionsHandlerProcessErrors(t *testing.T) {
+	cases := []struct {
+		err            error
+		expectedStatus int
+	}{
+		{adminservice.ErrInvalidAction, http.StatusBadRequest},
+		{adminservice.ErrMissingIdentifier, http.StatusBadRequest},
+		{submissions.ErrNotFound, http.StatusNotFound},
+		{streamers.ErrDuplicateAlias, http.StatusConflict},
+		{errors.New("boom"), http.StatusInternalServerError},
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
+	for _, tc := range cases {
+		t.Run(tc.err.Error(), func(t *testing.T) {
+			handler := adminhttp.NewSubmissionsHandler(adminhttp.SubmissionsHandlerOptions{
+				Authorizer: &stubAuthorizer{},
+				Service: &stubSubmissionsService{
+					processErr: tc.err,
+				},
+			})
+			body, _ := json.Marshal(map[string]string{"action": "approve", "id": "1"})
+			req := httptest.NewRequest(http.MethodPost, "/api/admin/submissions", bytes.NewReader(body))
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+			if rr.Code != tc.expectedStatus {
+				t.Fatalf("expected %d, got %d", tc.expectedStatus, rr.Code)
+			}
+		})
 	}
 }
 
-func testAdminYouTubeConfig() config.YouTubeConfig {
-	return config.YouTubeConfig{
-		HubURL:       "https://hub.example.com",
-		CallbackURL:  "https://callback.example.com/alerts",
-		Verify:       "async",
-		LeaseSeconds: 60,
-	}
+type stubAuthorizer struct {
+	err error
+}
+
+func (s *stubAuthorizer) AuthorizeRequest(*http.Request) error {
+	return s.err
+}
+
+type stubSubmissionsService struct {
+	list       []submissions.Submission
+	listErr    error
+	result     adminservice.ActionResult
+	processErr error
+	received   adminservice.ActionRequest
+}
+
+func (s *stubSubmissionsService) List(context.Context) ([]submissions.Submission, error) {
+	return s.list, s.listErr
+}
+
+func (s *stubSubmissionsService) Process(ctx context.Context, req adminservice.ActionRequest) (adminservice.ActionResult, error) {
+	s.received = req
+	return s.result, s.processErr
 }

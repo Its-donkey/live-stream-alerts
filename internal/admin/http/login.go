@@ -2,14 +2,27 @@ package adminhttp
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
 	adminauth "live-stream-alerts/internal/admin/auth"
+	adminservice "live-stream-alerts/internal/admin/service"
 )
 
+// LoginHandlerOptions configures the admin login handler.
+type LoginHandlerOptions struct {
+	Service loginService
+	Manager *adminauth.Manager
+}
+
+type loginService interface {
+	Login(email, password string) (adminauth.Token, error)
+}
+
+// LoginHandler exposes the admin login endpoint.
 type LoginHandler struct {
-	manager *adminauth.Manager
+	service loginService
 }
 
 type loginRequest struct {
@@ -22,8 +35,13 @@ type loginResponse struct {
 	ExpiresAt string `json:"expiresAt"`
 }
 
-func NewLoginHandler(manager *adminauth.Manager) http.Handler {
-	return LoginHandler{manager: manager}
+// NewLoginHandler constructs the admin login handler.
+func NewLoginHandler(opts LoginHandlerOptions) http.Handler {
+	svc := opts.Service
+	if svc == nil && opts.Manager != nil {
+		svc = adminservice.AuthService{Manager: opts.Manager}
+	}
+	return LoginHandler{service: svc}
 }
 
 func (h LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +50,7 @@ func (h LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.manager == nil {
+	if h.service == nil {
 		http.Error(w, "admin auth disabled", http.StatusServiceUnavailable)
 		return
 	}
@@ -43,9 +61,16 @@ func (h LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.manager.Login(req.Email, req.Password)
+	token, err := h.service.Login(req.Email, req.Password)
 	if err != nil {
-		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		switch {
+		case errors.Is(err, adminservice.ErrInvalidCredentials):
+			http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		case errors.Is(err, adminservice.ErrUnauthorized):
+			http.Error(w, "admin auth disabled", http.StatusServiceUnavailable)
+		default:
+			http.Error(w, "failed to authenticate", http.StatusInternalServerError)
+		}
 		return
 	}
 

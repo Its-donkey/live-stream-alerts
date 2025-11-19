@@ -109,12 +109,14 @@ func NewRouter(opts Options) http.Handler {
 	mux.Handle("/alert", alertsHandler)
 
 	if opts.AdminAuth != nil {
-		mux.Handle("/api/admin/login", adminhttp.NewLoginHandler(opts.AdminAuth))
+		mux.Handle("/api/admin/login", adminhttp.NewLoginHandler(adminhttp.LoginHandlerOptions{
+			Manager: opts.AdminAuth,
+		}))
 		mux.Handle("/api/admin/submissions", adminhttp.NewSubmissionsHandler(adminhttp.SubmissionsHandlerOptions{
-			Manager:         opts.AdminAuth,
-			Logger:          logger,
-			YouTube:         opts.YouTube,
-			StreamersStore:  streamersStore,
+			Manager:          opts.AdminAuth,
+			Logger:           logger,
+			YouTube:          opts.YouTube,
+			StreamersStore:   streamersStore,
 			SubmissionsStore: submissionsStore,
 		}))
 	}
@@ -163,8 +165,8 @@ func handleAlerts(notificationOpts youtubehandlers.AlertNotificationOptions) htt
 		case http.MethodGet:
 			if platform == "youtube" {
 				if youtubehandlers.HandleSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
-					Logger:        logger,
-					StreamersPath: notificationOpts.StreamersPath,
+					Logger:         logger,
+					StreamersPath:  notificationOpts.StreamersPath,
 					StreamersStore: notificationOpts.StreamersStore,
 				}) {
 					return
