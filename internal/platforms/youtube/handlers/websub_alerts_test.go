@@ -52,7 +52,7 @@ func TestHandleSubscriptionConfirmationSuccess(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/alerts?"+values.Encode(), nil)
 	rr := httptest.NewRecorder()
 
-	handled := HandleSubscriptionConfirmation(rr, req, SubscriptionConfirmationOptions{StreamersPath: path, StreamersStore: store, Logger: &memoryLogger{}})
+	handled := HandleSubscriptionConfirmation(rr, req, SubscriptionConfirmationOptions{StreamersStore: store, Logger: &memoryLogger{}})
 	if !handled {
 		t.Fatalf("expected request to be handled")
 	}
@@ -110,7 +110,7 @@ func TestHandleSubscriptionConfirmationSkipsLeaseForUnsubscribe(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/alerts?"+values.Encode(), nil)
 	rr := httptest.NewRecorder()
 
-	handled := HandleSubscriptionConfirmation(rr, req, SubscriptionConfirmationOptions{StreamersPath: path, StreamersStore: store, Logger: &memoryLogger{}})
+	handled := HandleSubscriptionConfirmation(rr, req, SubscriptionConfirmationOptions{StreamersStore: store, Logger: &memoryLogger{}})
 	if !handled {
 		t.Fatalf("expected request to be handled")
 	}

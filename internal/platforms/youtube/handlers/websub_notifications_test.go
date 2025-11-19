@@ -67,7 +67,6 @@ func TestHandleAlertNotificationUpdatesStatus(t *testing.T) {
 		},
 	}
 	opts := AlertNotificationOptions{
-		StreamersPath:  path,
 		StreamersStore: store,
 		VideoLookup:    lookup,
 	}
@@ -133,7 +132,6 @@ func TestHandleAlertNotificationHandlesLookupFailure(t *testing.T) {
 		t.Fatalf("expected 202 when lookup fails, got %d", rr.Code)
 	}
 }
-
 
 func TestHandleAlertNotificationSkipsUnsupportedPaths(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/other", nil)

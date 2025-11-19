@@ -39,7 +39,6 @@ func TestRecordLeaseUpdatesFile(t *testing.T) {
 	}
 }
 
-
 func TestRecordLeaseValidatesInput(t *testing.T) {
 	if err := RecordLease(nil, "", time.Now()); err == nil {
 		t.Fatalf("expected error when channel ID missing")

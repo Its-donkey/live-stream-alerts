@@ -69,6 +69,7 @@
 - WebSub subscriptions now dump the full hub response and log when Google accepts a request so operators can trace every step from the API proxy through confirmation.
 - The companion alGUI now listens to `/api/streamers/watch` so the roster refreshes automatically whenever streamer data changes.
 ### Fixed
+- Streamer service deletion tests now supply the required YouTube callback URL so subscription management validations mirror production behavior and `go test ./...` stays green.
 - Persist `streamer.alias` when creating records and require it as the primary identifier so requests without names no longer lose the alias field.
 - Removed references to the deprecated `/api/youtube/new/subscribe` alias so the README only lists active endpoints.
 - Allow `DELETE /api/streamers/{id}` to accept RFC3339 timestamps with or without fractional seconds so clients can resend the stored `createdAt` value without losing precision.

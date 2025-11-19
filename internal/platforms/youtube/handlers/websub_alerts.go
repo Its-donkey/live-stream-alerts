@@ -18,8 +18,7 @@ import (
 
 // SubscriptionConfirmationOptions configures how hub verification requests are handled.
 type SubscriptionConfirmationOptions struct {
-	Logger        logging.Logger
-	StreamersPath string
+	Logger         logging.Logger
 	StreamersStore *streamers.Store
 }
 

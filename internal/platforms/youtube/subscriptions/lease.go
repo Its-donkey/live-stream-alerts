@@ -12,15 +12,15 @@ import (
 
 // RecordLease stores the verification timestamp for the supplied channel ID.
 func RecordLease(store *streamers.Store, channelID string, verifiedAt time.Time) error {
- channelID = strings.TrimSpace(channelID)
- if channelID == "" {
-     return errors.New("channelID is required")
- }
- if store == nil {
-     store = streamers.NewStore(streamers.DefaultFilePath)
- }
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" {
+		return errors.New("channelID is required")
+	}
+	if store == nil {
+		store = streamers.NewStore(streamers.DefaultFilePath)
+	}
 
- err := store.UpdateFile(func(file *streamers.File) error {
+	err := store.UpdateFile(func(file *streamers.File) error {
 		for i := range file.Records {
 			yt := file.Records[i].Platforms.YouTube
 			if yt == nil {

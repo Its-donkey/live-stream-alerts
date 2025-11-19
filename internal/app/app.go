@@ -16,6 +16,7 @@ import (
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/subscriptions"
 	"live-stream-alerts/internal/streamers"
+	streamersvc "live-stream-alerts/internal/streamers/service"
 	"live-stream-alerts/internal/submissions"
 )
 
@@ -58,6 +59,12 @@ func Run(ctx context.Context, opts Options) error {
 
 	streamerStore := streamers.NewStore(streamers.DefaultFilePath)
 	submissionStore := submissions.NewStore(submissions.DefaultFilePath)
+	streamerService := streamersvc.New(streamersvc.Options{
+		Streamers:     streamerStore,
+		Submissions:   submissionStore,
+		YouTubeClient: &http.Client{Timeout: 10 * time.Second},
+		YouTubeHubURL: strings.TrimSpace(appCfg.YouTube.HubURL),
+	})
 
 	adminAuth := buildAdminManager(appCfg.Admin)
 
@@ -67,8 +74,9 @@ func Run(ctx context.Context, opts Options) error {
 		StreamersStore:   streamerStore,
 		SubmissionsPath:  submissionStore.Path(),
 		SubmissionsStore: submissionStore,
+		StreamersService: streamerService,
 		AdminAuth:        adminAuth,
-		YouTube:         appCfg.YouTube,
+		YouTube:          appCfg.YouTube,
 		RuntimeInfo: apiv1.RuntimeInfo{
 			Name:        "live-stream-alerts",
 			Addr:        appCfg.Server.Addr,
