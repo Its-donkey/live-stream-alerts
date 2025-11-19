@@ -168,13 +168,13 @@ func (h submissionsHandler) update(w http.ResponseWriter, r *http.Request) {
 			ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 			defer cancel()
 			onboardOpts := onboarding.Options{
-				Client:        h.youtubeClient,
-				HubURL:        strings.TrimSpace(h.youtube.HubURL),
-				CallbackURL:   strings.TrimSpace(h.youtube.CallbackURL),
-				VerifyMode:    strings.TrimSpace(h.youtube.Verify),
-				LeaseSeconds:  h.youtube.LeaseSeconds,
-				Logger:        h.logger,
-				Store:         h.streamersStore,
+				Client:       h.youtubeClient,
+				HubURL:       strings.TrimSpace(h.youtube.HubURL),
+				CallbackURL:  strings.TrimSpace(h.youtube.CallbackURL),
+				VerifyMode:   strings.TrimSpace(h.youtube.Verify),
+				LeaseSeconds: h.youtube.LeaseSeconds,
+				Logger:       h.logger,
+				Store:        h.streamersStore,
 			}
 			if err := onboarding.FromURL(ctx, persisted, url, onboardOpts); err != nil && h.logger != nil {
 				h.logger.Printf("failed to process platform url for %s: %v", persisted.Streamer.Alias, err)

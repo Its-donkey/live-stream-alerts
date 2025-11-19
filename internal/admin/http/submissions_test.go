@@ -59,13 +59,13 @@ func TestSubmissionsHandlerApprove(t *testing.T) {
 	data := submissions.File{Submissions: []submissions.Submission{
 		{ID: "1", Alias: "Test", SubmittedAt: time.Now().UTC()},
 	}}
-writeSubmissionsFile(t, path, data)
+	writeSubmissionsFile(t, path, data)
 
-mgr := adminauth.NewManager(adminauth.Config{Email: "admin@example.com", Password: "secret"})
-token, _ := mgr.Login("admin@example.com", "secret")
-streamersPath := filepath.Join(dir, "streamers.json")
-submissionsStore := submissions.NewStore(path)
-streamersStore := streamers.NewStore(streamersPath)
+	mgr := adminauth.NewManager(adminauth.Config{Email: "admin@example.com", Password: "secret"})
+	token, _ := mgr.Login("admin@example.com", "secret")
+	streamersPath := filepath.Join(dir, "streamers.json")
+	submissionsStore := submissions.NewStore(path)
+	streamersStore := streamers.NewStore(streamersPath)
 	handler := adminhttp.NewSubmissionsHandler(adminhttp.SubmissionsHandlerOptions{
 		Manager:          mgr,
 		SubmissionsStore: submissionsStore,
