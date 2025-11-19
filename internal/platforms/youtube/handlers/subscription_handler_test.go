@@ -2,32 +2,31 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
+
+	youtubeservice "live-stream-alerts/internal/platforms/youtube/service"
+	"live-stream-alerts/internal/platforms/youtube/subscriptions"
 )
 
-func defaultSubscriptionOptions() SubscriptionHandlerOptions {
-	return SubscriptionHandlerOptions{
-		HubURL:       "https://hub.example.com/subscribe",
-		CallbackURL:  "https://callback.example.com/alerts",
-		VerifyMode:   "async",
-		LeaseSeconds: 60,
-	}
+type stubSubscriptionProxy struct {
+	result youtubeservice.SubscriptionResult
+	err    error
+	req    subscriptions.YouTubeRequest
 }
 
-type stubRoundTrip func(*http.Request) (*http.Response, error)
-
-func (s stubRoundTrip) RoundTrip(req *http.Request) (*http.Response, error) {
-	return s(req)
+func (s *stubSubscriptionProxy) Process(ctx context.Context, req subscriptions.YouTubeRequest) (youtubeservice.SubscriptionResult, error) {
+	s.req = req
+	return s.result, s.err
 }
 
 func TestSubscriptionHandlerReturnsBadRequestForValidationErrors(t *testing.T) {
-	handler := NewUnsubscribeHandler(defaultSubscriptionOptions())
+	proxy := &stubSubscriptionProxy{}
+	handler := NewUnsubscribeHandler(SubscriptionHandlerOptions{Proxy: proxy})
 	body, _ := json.Marshal(map[string]string{
 		"topic": "",
 	})
@@ -39,19 +38,13 @@ func TestSubscriptionHandlerReturnsBadRequestForValidationErrors(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for validation error, got %d", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "topic is required") {
-		t.Fatalf("expected validation message, got %q", rr.Body.String())
-	}
 }
 
 func TestSubscriptionHandlerReturnsBadGatewayForHubFailures(t *testing.T) {
-	client := &http.Client{Transport: stubRoundTrip(func(req *http.Request) (*http.Response, error) {
-		return nil, errors.New("dial tcp: i/o timeout")
-	})}
-
-	opts := defaultSubscriptionOptions()
-	opts.Client = client
-	handler := NewSubscribeHandler(opts)
+	proxy := &stubSubscriptionProxy{
+		err: &youtubeservice.ProxyError{Status: http.StatusBadGateway, Err: errors.New("timeout")},
+	}
+	handler := NewSubscribeHandler(SubscriptionHandlerOptions{Proxy: proxy})
 	body, _ := json.Marshal(map[string]string{
 		"topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC123",
 	})
@@ -63,33 +56,21 @@ func TestSubscriptionHandlerReturnsBadGatewayForHubFailures(t *testing.T) {
 	if rr.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502 for hub failure, got %d", rr.Code)
 	}
-	if !strings.Contains(rr.Body.String(), "post to hub") {
-		t.Fatalf("expected hub failure message, got %q", rr.Body.String())
-	}
 }
 
-func TestUnsubscribeHandlerDoesNotSetLeaseSeconds(t *testing.T) {
-	var leaseParam string
-	client := &http.Client{Transport: stubRoundTrip(func(req *http.Request) (*http.Response, error) {
-		if err := req.ParseForm(); err != nil {
-			t.Fatalf("parse form: %v", err)
-		}
-		leaseParam = req.Form.Get("hub.lease_seconds")
-		resp := &http.Response{
-			StatusCode: http.StatusAccepted,
-			Body:       io.NopCloser(strings.NewReader("accepted")),
-			Header:     make(http.Header),
-		}
-		return resp, nil
-	})}
-
-	opts := defaultSubscriptionOptions()
-	opts.Client = client
-	handler := NewUnsubscribeHandler(opts)
+func TestSubscriptionHandlerSuccess(t *testing.T) {
+	proxy := &stubSubscriptionProxy{
+		result: youtubeservice.SubscriptionResult{
+			StatusCode:  http.StatusAccepted,
+			ContentType: "text/plain",
+			Body:        []byte("accepted"),
+		},
+	}
+	handler := NewSubscribeHandler(SubscriptionHandlerOptions{Proxy: proxy})
 	body, _ := json.Marshal(map[string]string{
 		"topic": "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC123",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/youtube/unsubscribe", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/youtube/subscribe", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
@@ -97,7 +78,10 @@ func TestUnsubscribeHandlerDoesNotSetLeaseSeconds(t *testing.T) {
 	if rr.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d", rr.Code)
 	}
-	if leaseParam != "" {
-		t.Fatalf("expected lease seconds to be omitted for unsubscribe, got %q", leaseParam)
+	if rr.Header().Get("Content-Type") != "text/plain" {
+		t.Fatalf("expected content type to propagate")
+	}
+	if proxy.req.Topic == "" {
+		t.Fatalf("expected proxy to receive request")
 	}
 }

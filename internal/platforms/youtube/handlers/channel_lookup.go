@@ -1,40 +1,80 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
-	"live-stream-alerts/internal/platforms/youtube/subscriptions"
+	"live-stream-alerts/internal/logging"
+	youtubeservice "live-stream-alerts/internal/platforms/youtube/service"
 )
 
 type channelLookupRequest struct {
 	Handle string `json:"handle"`
 }
 
+type channelResolver interface {
+	ResolveHandle(ctx context.Context, handle string) (string, error)
+}
+
+// ChannelLookupHandlerOptions configures the channel lookup handler.
+type ChannelLookupHandlerOptions struct {
+	Resolver channelResolver
+	Client   *http.Client
+	Logger   logging.Logger
+}
+
+type channelLookupHandler struct {
+	resolver channelResolver
+	logger   logging.Logger
+}
+
 // NewChannelLookupHandler resolves a YouTube handle to its canonical channel ID.
-func NewChannelLookupHandler(client *http.Client) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isPostRequest(r) {
-			writeMethodNotAllowed(w, http.MethodPost)
-			return
-		}
-		defer r.Body.Close()
+func NewChannelLookupHandler(opts ChannelLookupHandlerOptions) http.Handler {
+	resolver := opts.Resolver
+	if resolver == nil {
+		resolver = youtubeservice.ChannelResolver{Client: opts.Client}
+	}
+	h := channelLookupHandler{resolver: resolver, logger: opts.Logger}
+	return http.HandlerFunc(h.ServeHTTP)
+}
 
-		payload, validation := decodeChannelLookupRequest(r)
-		if !validation.IsValid {
-			http.Error(w, validation.Error, http.StatusBadRequest)
-			return
-		}
+func (h channelLookupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !isPostRequest(r) {
+		writeMethodNotAllowed(w, http.MethodPost)
+		return
+	}
+	defer r.Body.Close()
 
-		channelID, err := subscriptions.ResolveChannelID(r.Context(), payload.Handle, client)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
+	payload, err := decodeChannelLookupRequest(r)
+	if err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
 
-		writeChannelLookupResponse(w, payload.Handle, channelID)
-	})
+	channelID, err := h.resolver.ResolveHandle(r.Context(), payload.Handle)
+	if err != nil {
+		h.respondError(w, err)
+		return
+	}
+
+	writeChannelLookupResponse(w, payload.Handle, channelID)
+}
+
+func (h channelLookupHandler) respondError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, youtubeservice.ErrValidation):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, youtubeservice.ErrUpstream):
+		http.Error(w, "failed to resolve channel handle", http.StatusBadGateway)
+	default:
+		if h.logger != nil {
+			h.logger.Printf("channel lookup failed: %v", err)
+		}
+		http.Error(w, "failed to resolve channel handle", http.StatusInternalServerError)
+	}
 }
 
 func isPostRequest(r *http.Request) bool {
@@ -46,18 +86,13 @@ func writeMethodNotAllowed(w http.ResponseWriter, methods ...string) {
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 }
 
-func decodeChannelLookupRequest(r *http.Request) (channelLookupRequest, ValidationResult) {
+func decodeChannelLookupRequest(r *http.Request) (channelLookupRequest, error) {
 	var payload channelLookupRequest
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		return payload, ValidationResult{IsValid: false, Error: "invalid JSON body"}
+		return payload, err
 	}
 
-	payload.Handle = strings.TrimSpace(payload.Handle)
-	if payload.Handle == "" {
-		return payload, ValidationResult{IsValid: false, Error: "there is no value for handle set"}
-	}
-
-	return payload, ValidationResult{IsValid: true}
+	return payload, nil
 }
 
 func writeChannelLookupResponse(w http.ResponseWriter, handle, channelID string) {

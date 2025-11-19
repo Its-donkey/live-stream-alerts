@@ -2,30 +2,30 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"io"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	youtubeservice "live-stream-alerts/internal/platforms/youtube/service"
 )
 
-type stubTransport struct{}
+type stubChannelResolver struct {
+	id   string
+	err  error
+	seen string
+}
 
-func (stubTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	body := `{"channelId":"UC1234567890123456789012"}`
-	resp := &http.Response{
-		StatusCode: http.StatusOK,
-		Header:     make(http.Header),
-		Body:       io.NopCloser(bytes.NewBufferString(body)),
-		Request:    req,
-	}
-	resp.Header.Set("Content-Type", "text/html")
-	return resp, nil
+func (s *stubChannelResolver) ResolveHandle(_ context.Context, handle string) (string, error) {
+	s.seen = handle
+	return s.id, s.err
 }
 
 func TestChannelLookupHandler(t *testing.T) {
-	client := &http.Client{Transport: stubTransport{}}
-	handler := NewChannelLookupHandler(client)
+	resolver := &stubChannelResolver{id: "UC1234567890123456789012"}
+	handler := NewChannelLookupHandler(ChannelLookupHandlerOptions{Resolver: resolver})
 
 	t.Run("method", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/youtube/channel", nil)
@@ -45,26 +45,43 @@ func TestChannelLookupHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("missing handle", func(t *testing.T) {
-		payload, _ := json.Marshal(map[string]string{})
+	t.Run("validation error", func(t *testing.T) {
+		payload, _ := json.Marshal(map[string]string{"handle": "@example"})
 		req := httptest.NewRequest(http.MethodPost, "/api/youtube/channel", bytes.NewReader(payload))
 		rr := httptest.NewRecorder()
+		resolver.err = fmt.Errorf("%w: handle required", youtubeservice.ErrValidation)
 		handler.ServeHTTP(rr, req)
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", rr.Code)
 		}
 	})
 
-	t.Run("success", func(t *testing.T) {
+	t.Run("upstream error", func(t *testing.T) {
 		payload, _ := json.Marshal(map[string]string{"handle": "@example"})
 		req := httptest.NewRequest(http.MethodPost, "/api/youtube/channel", bytes.NewReader(payload))
 		rr := httptest.NewRecorder()
+		resolver.err = fmt.Errorf("%w: boom", youtubeservice.ErrUpstream)
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusBadGateway {
+			t.Fatalf("expected 502, got %d", rr.Code)
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		resolver.err = nil
+		payload, _ := json.Marshal(map[string]string{"handle": "@example"})
+		req := httptest.NewRequest(http.MethodPost, "/api/youtube/channel", bytes.NewReader(payload))
+		rr := httptest.NewRecorder()
+
 		handler.ServeHTTP(rr, req)
 		if rr.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", rr.Code)
 		}
 		if !bytes.Contains(rr.Body.Bytes(), []byte("UC12345678901234567890")) {
 			t.Fatalf("expected response to contain channel ID")
+		}
+		if resolver.seen != "@example" {
+			t.Fatalf("expected resolver to receive handle")
 		}
 	})
 }
