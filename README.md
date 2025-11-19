@@ -15,6 +15,9 @@ go vet ./...
 go test ./...
 ```
 
+## Architecture
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the layered overview (cmd ➜ app ➜ router ➜ services ➜ stores/platform clients), background workers, and testing conventions.
+
 ## Running the alert server
 1. Start the HTTP server:
    ```bash

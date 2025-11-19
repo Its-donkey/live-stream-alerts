@@ -43,6 +43,7 @@
 - Submissions store now accepts injected clocks/ID generators so tests can deterministically assert `SubmittedAt` and ID values without relying on real time.
 - Split the WebSub notification handler into a dedicated `service.AlertProcessor`, keeping the HTTP layer focused on method/path/response mapping while business logic (feed parsing, lookups, live-status updates) lives in the service with targeted tests.
 - Added `.github/workflows/ci.yml` so gofmt/vet/test run on every push/PR, and documented the workflow in the README to keep config/transport/core/CI responsibilities clear.
+- Added `docs/ARCHITECTURE.md` (linked from the README) documenting the layered design, key packages, background workers, and testing conventions so future contributors understand the configuration/transport/core separation.
 - Reworked configuration/state wiring so YouTube hub/callback/verify/lease settings are injected through `internal/api/v1`, onboarding, admin submissions, and subscription clients instead of relying on the old `config.YT` globals.
 - Removed the embedded alGUI assets/handler so the alert server stays API-only, returning a placeholder at `/` and keeping the UI’s traffic out of alert-server logs.
 - Allowed `streamer.firstName`, `streamer.lastName`, and `streamer.email` fields to be blank in the JSON schema so optional contact details no longer trigger validation errors.
