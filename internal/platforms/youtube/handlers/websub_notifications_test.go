@@ -31,7 +31,8 @@ func (s *stubVideoLookup) Fetch(ctx context.Context, videoIDs []string) (map[str
 func TestHandleAlertNotificationUpdatesStatus(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "streamers.json")
-	_, err := streamers.Append(path, streamers.Record{
+	store := streamers.NewStore(path)
+	_, err := store.Append(streamers.Record{
 		Streamer: streamers.Streamer{Alias: "Test"},
 		Platforms: streamers.Platforms{
 			YouTube: &streamers.YouTubePlatform{ChannelID: "UCdemo"},
@@ -66,8 +67,9 @@ func TestHandleAlertNotificationUpdatesStatus(t *testing.T) {
 		},
 	}
 	opts := AlertNotificationOptions{
-		StreamersPath: path,
-		VideoLookup:   lookup,
+		StreamersPath:  path,
+		StreamersStore: store,
+		VideoLookup:    lookup,
 	}
 
 	if !HandleAlertNotification(rr, req, opts) {
@@ -80,7 +82,7 @@ func TestHandleAlertNotificationUpdatesStatus(t *testing.T) {
 		t.Fatalf("expected lookup to be called once, got %d", lookup.calls)
 	}
 
-	records, err := streamers.List(path)
+	records, err := store.List()
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -95,7 +97,10 @@ func TestHandleAlertNotificationUpdatesStatus(t *testing.T) {
 func TestHandleAlertNotificationRejectsInvalidFeed(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/alerts", bytes.NewBufferString("not xml"))
 	rr := httptest.NewRecorder()
-	opts := AlertNotificationOptions{VideoLookup: &stubVideoLookup{}}
+	opts := AlertNotificationOptions{
+		VideoLookup:    &stubVideoLookup{},
+		StreamersStore: streamers.NewStore(filepath.Join(t.TempDir(), "streamers.json")),
+	}
 
 	if !HandleAlertNotification(rr, req, opts) {
 		t.Fatalf("expected handler to run")
@@ -116,7 +121,10 @@ func TestHandleAlertNotificationHandlesLookupFailure(t *testing.T) {
 </feed>`
 	req := httptest.NewRequest(http.MethodPost, "/alerts", bytes.NewBufferString(body))
 	rr := httptest.NewRecorder()
-	opts := AlertNotificationOptions{VideoLookup: &stubVideoLookup{err: errors.New("lookup failed")}}
+	opts := AlertNotificationOptions{
+		VideoLookup:    &stubVideoLookup{err: errors.New("lookup failed")},
+		StreamersStore: streamers.NewStore(filepath.Join(t.TempDir(), "streamers.json")),
+	}
 
 	if !HandleAlertNotification(rr, req, opts) {
 		t.Fatalf("expected handler to run")
@@ -126,9 +134,14 @@ func TestHandleAlertNotificationHandlesLookupFailure(t *testing.T) {
 	}
 }
 
+
 func TestHandleAlertNotificationSkipsUnsupportedPaths(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/other", nil)
-	if HandleAlertNotification(httptest.NewRecorder(), req, AlertNotificationOptions{VideoLookup: &stubVideoLookup{}}) {
+	opts := AlertNotificationOptions{
+		VideoLookup:    &stubVideoLookup{},
+		StreamersStore: streamers.NewStore(filepath.Join(t.TempDir(), "streamers.json")),
+	}
+	if HandleAlertNotification(httptest.NewRecorder(), req, opts) {
 		t.Fatalf("expected handler to ignore unsupported paths")
 	}
 }

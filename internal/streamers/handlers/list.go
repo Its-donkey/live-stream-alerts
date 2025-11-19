@@ -8,8 +8,12 @@ import (
 	"live-stream-alerts/internal/streamers"
 )
 
-func listStreamers(w http.ResponseWriter, path string, logger logging.Logger) {
-	records, err := streamers.List(path)
+func listStreamers(w http.ResponseWriter, store *streamers.Store, logger logging.Logger) {
+	if store == nil {
+		http.Error(w, "streamers store not configured", http.StatusInternalServerError)
+		return
+	}
+	records, err := store.List()
 	if err != nil {
 		if logger != nil {
 			logger.Printf("failed to list streamers: %v", err)

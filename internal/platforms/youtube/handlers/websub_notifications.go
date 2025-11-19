@@ -20,9 +20,10 @@ type LiveVideoLookup interface {
 
 // AlertNotificationOptions configure POST /alerts handling.
 type AlertNotificationOptions struct {
-	Logger        logging.Logger
-	StreamersPath string
-	VideoLookup   LiveVideoLookup
+	Logger         logging.Logger
+	StreamersPath  string
+	StreamersStore *streamers.Store
+	VideoLookup    LiveVideoLookup
 }
 
 // HandleAlertNotification processes YouTube hub POST notifications.
@@ -36,7 +37,7 @@ func HandleAlertNotification(w http.ResponseWriter, r *http.Request, opts AlertN
 		return false
 	}
 
-	if opts.VideoLookup == nil {
+	if opts.VideoLookup == nil || opts.StreamersStore == nil {
 		return false
 	}
 
@@ -91,7 +92,7 @@ func HandleAlertNotification(w http.ResponseWriter, r *http.Request, opts AlertN
 		if startedAt.IsZero() {
 			startedAt = entry.Updated
 		}
-		_, err := streamers.UpdateYouTubeLiveStatus(opts.StreamersPath, entry.ChannelID, streamers.YouTubeLiveStatus{
+		_, err := opts.StreamersStore.UpdateYouTubeLiveStatus(entry.ChannelID, streamers.YouTubeLiveStatus{
 			Live:      true,
 			VideoID:   entry.VideoID,
 			StartedAt: startedAt,

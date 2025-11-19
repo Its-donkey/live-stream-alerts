@@ -23,7 +23,11 @@ type createRequest struct {
 	} `json:"platforms"`
 }
 
-func createStreamer(w http.ResponseWriter, r *http.Request, streamersPath, submissionsPath string, logger logging.Logger) {
+func createStreamer(w http.ResponseWriter, r *http.Request, store *streamers.Store, submissionsStore *submissions.Store, logger logging.Logger) {
+	if store == nil || submissionsStore == nil {
+		http.Error(w, "storage not configured", http.StatusInternalServerError)
+		return
+	}
 	defer r.Body.Close()
 	var req createRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -37,7 +41,7 @@ func createStreamer(w http.ResponseWriter, r *http.Request, streamersPath, submi
 		return
 	}
 
-	if err := ensureUniqueAlias(streamersPath, submissionsPath, record.Streamer.Alias); err != nil {
+	if err := ensureUniqueAlias(store, submissionsStore, record.Streamer.Alias); err != nil {
 		if errors.Is(err, errDuplicateAlias) {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
@@ -55,7 +59,7 @@ func createStreamer(w http.ResponseWriter, r *http.Request, streamersPath, submi
 		Languages:   record.Streamer.Languages,
 		PlatformURL: strings.TrimSpace(req.Platforms.URL),
 	}
-	if _, err := submissions.Append(submissionsPath, submission); err != nil {
+	if _, err := submissionsStore.Append(submission); err != nil {
 		if logger != nil {
 			logger.Printf("failed to queue submission: %v", err)
 		}
@@ -211,13 +215,13 @@ var allowedLanguagesSet = func() map[string]struct{} {
 
 var errDuplicateAlias = fmt.Errorf("a streamer with that alias already exists")
 
-func ensureUniqueAlias(streamersPath, submissionsPath, alias string) error {
+func ensureUniqueAlias(streamerStore *streamers.Store, submissionsStore *submissions.Store, alias string) error {
 	key := streamers.NormaliseAlias(alias)
 	if key == "" {
 		return nil
 	}
 
-	records, err := streamers.List(streamersPath)
+	records, err := streamerStore.List()
 	if err != nil {
 		return err
 	}
@@ -227,7 +231,7 @@ func ensureUniqueAlias(streamersPath, submissionsPath, alias string) error {
 		}
 	}
 
-	pending, err := submissions.List(submissionsPath)
+	pending, err := submissionsStore.List()
 	if err != nil {
 		return err
 	}

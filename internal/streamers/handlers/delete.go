@@ -20,11 +20,15 @@ type deleteRequest struct {
 	} `json:"streamer"`
 }
 
-func deleteStreamer(w http.ResponseWriter, r *http.Request, path string, logger logging.Logger, youtubeClient *http.Client, youtubeHubURL string) {
+func deleteStreamer(w http.ResponseWriter, r *http.Request, store *streamers.Store, logger logging.Logger, youtubeClient *http.Client, youtubeHubURL string) {
 	// Enforce method (defensive check; switch already filtered by method)
 	if r.Method != http.MethodDelete {
 		w.Header().Set("Allow", http.MethodDelete)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if store == nil {
+		http.Error(w, "streamers store not configured", http.StatusInternalServerError)
 		return
 	}
 
@@ -43,7 +47,7 @@ func deleteStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 		return
 	}
 
-	record, err := streamers.Get(path, bodyID)
+	record, err := store.Get(bodyID)
 	if err != nil {
 		switch {
 		case errors.Is(err, streamers.ErrStreamerNotFound):
@@ -78,7 +82,7 @@ func deleteStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 	}
 
 	// Perform delete via streamers.Delete
-	if err := streamers.Delete(path, bodyID); err != nil {
+	if err := store.Delete(bodyID); err != nil {
 		switch {
 		case errors.Is(err, streamers.ErrStreamerNotFound):
 			http.Error(w, "streamer not found", http.StatusNotFound)

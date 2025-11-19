@@ -32,6 +32,7 @@
 - Updated POST `/api/streamers` to queue submissions in `data/submissions.json` until an admin approves them, keeping `data/streamers.json` limited to vetted entries.
 - Added a background YouTube lease monitor that renews subscriptions once ~95% of the current `leaseSeconds` window has elapsed so WebSub callbacks keep flowing without manual intervention.
 ### Changed
+- Encapsulated the streamer and submissions file stores behind `streamers.Store`/`submissions.Store` so handlers, admins, and WebSub flows share path-scoped locks instead of package-level globals.
 - Reworked configuration/state wiring so YouTube hub/callback/verify/lease settings are injected through `internal/api/v1`, onboarding, admin submissions, and subscription clients instead of relying on the old `config.YT` globals.
 - Removed the embedded alGUI assets/handler so the alert server stays API-only, returning a placeholder at `/` and keeping the UI’s traffic out of alert-server logs.
 - Allowed `streamer.firstName`, `streamer.lastName`, and `streamer.email` fields to be blank in the JSON schema so optional contact details no longer trigger validation errors.

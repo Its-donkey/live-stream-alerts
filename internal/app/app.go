@@ -56,13 +56,18 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	logger := logging.New()
 
+	streamerStore := streamers.NewStore(streamers.DefaultFilePath)
+	submissionStore := submissions.NewStore(submissions.DefaultFilePath)
+
 	adminAuth := buildAdminManager(appCfg.Admin)
 
 	router := apiv1.NewRouter(apiv1.Options{
-		Logger:          logger,
-		StreamersPath:   streamers.DefaultFilePath,
-		SubmissionsPath: submissions.DefaultFilePath,
-		AdminAuth:       adminAuth,
+		Logger:           logger,
+		StreamersPath:    streamerStore.Path(),
+		StreamersStore:   streamerStore,
+		SubmissionsPath:  submissionStore.Path(),
+		SubmissionsStore: submissionStore,
+		AdminAuth:        adminAuth,
 		YouTube:         appCfg.YouTube,
 		RuntimeInfo: apiv1.RuntimeInfo{
 			Name:        "live-stream-alerts",
@@ -102,7 +107,7 @@ func Run(ctx context.Context, opts Options) error {
 		LeaseSeconds: appCfg.YouTube.LeaseSeconds,
 	}
 	subscriptions.StartLeaseMonitor(monitorCtx, subscriptions.LeaseMonitorConfig{
-		StreamersPath: streamers.DefaultFilePath,
+		StreamersPath: streamerStore.Path(),
 		Interval:      time.Minute,
 		Options:       monitorOpts,
 	})
