@@ -6,6 +6,15 @@ A lightweight Go service that proxies YouTube WebSub subscriptions, stores strea
 - Go 1.21+
 - (Optional) `make` for your own helper scripts
 
+## Continuous integration
+Every push/PR triggers `.github/workflows/ci.yml`, which runs `gofmt` (as a lint check), `go vet ./...`, and `go test ./...`. Run those locally before opening a PR to avoid CI failures:
+
+```bash
+gofmt -w .
+go vet ./...
+go test ./...
+```
+
 ## Running the alert server
 1. Start the HTTP server:
    ```bash
