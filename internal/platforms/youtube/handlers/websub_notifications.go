@@ -21,7 +21,6 @@ type LiveVideoLookup interface {
 // AlertNotificationOptions configure POST /alerts handling.
 type AlertNotificationOptions struct {
 	Logger         logging.Logger
-	StreamersPath  string
 	StreamersStore *streamers.Store
 	VideoLookup    LiveVideoLookup
 }

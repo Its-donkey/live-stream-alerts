@@ -15,6 +15,7 @@ import (
 	"live-stream-alerts/internal/platforms/youtube/liveinfo"
 	"live-stream-alerts/internal/streamers"
 	streamershandlers "live-stream-alerts/internal/streamers/handlers"
+	streamersvc "live-stream-alerts/internal/streamers/service"
 	"live-stream-alerts/internal/submissions"
 )
 
@@ -37,6 +38,7 @@ type Options struct {
 	SubmissionsPath    string
 	StreamersStore     *streamers.Store
 	SubmissionsStore   *submissions.Store
+	StreamersService   streamershandlers.StreamerService
 	AdminAuth          *adminauth.Manager
 	YouTube            config.YouTubeConfig
 	AlertNotifications youtubehandlers.AlertNotificationOptions
@@ -65,11 +67,18 @@ func NewRouter(opts Options) http.Handler {
 	}
 	submissionsPath = submissionsStore.Path()
 
+	streamerService := opts.StreamersService
+	if streamerService == nil {
+		streamerService = streamersvc.New(streamersvc.Options{
+			Streamers:     streamersStore,
+			Submissions:   submissionsStore,
+			YouTubeClient: &http.Client{Timeout: 10 * time.Second},
+			YouTubeHubURL: strings.TrimSpace(opts.YouTube.HubURL),
+		})
+	}
 	streamersHandler := streamershandlers.StreamersHandler(streamershandlers.StreamOptions{
-		Logger:           logger,
-		Store:            streamersStore,
-		SubmissionsStore: submissionsStore,
-		YouTubeHubURL:    strings.TrimSpace(opts.YouTube.HubURL),
+		Logger:  logger,
+		Service: streamerService,
 	})
 
 	mux.Handle("/api/youtube/channel", youtubehandlers.NewChannelLookupHandler(nil))
@@ -94,9 +103,6 @@ func NewRouter(opts Options) http.Handler {
 	if alertsOpts.Logger == nil {
 		alertsOpts.Logger = logger
 	}
-	if alertsOpts.StreamersPath == "" {
-		alertsOpts.StreamersPath = streamersPath
-	}
 	if alertsOpts.StreamersStore == nil {
 		alertsOpts.StreamersStore = streamersStore
 	}
@@ -111,10 +117,10 @@ func NewRouter(opts Options) http.Handler {
 	if opts.AdminAuth != nil {
 		mux.Handle("/api/admin/login", adminhttp.NewLoginHandler(opts.AdminAuth))
 		mux.Handle("/api/admin/submissions", adminhttp.NewSubmissionsHandler(adminhttp.SubmissionsHandlerOptions{
-			Manager:         opts.AdminAuth,
-			Logger:          logger,
-			YouTube:         opts.YouTube,
-			StreamersStore:  streamersStore,
+			Manager:          opts.AdminAuth,
+			Logger:           logger,
+			YouTube:          opts.YouTube,
+			StreamersStore:   streamersStore,
 			SubmissionsStore: submissionsStore,
 		}))
 	}
@@ -163,8 +169,7 @@ func handleAlerts(notificationOpts youtubehandlers.AlertNotificationOptions) htt
 		case http.MethodGet:
 			if platform == "youtube" {
 				if youtubehandlers.HandleSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
-					Logger:        logger,
-					StreamersPath: notificationOpts.StreamersPath,
+					Logger:         logger,
 					StreamersStore: notificationOpts.StreamersStore,
 				}) {
 					return

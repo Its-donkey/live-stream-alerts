@@ -18,13 +18,13 @@ import (
 
 // Options configures how YouTube onboarding should behave.
 type Options struct {
-	Client        *http.Client
-	HubURL        string
-	CallbackURL   string
-	VerifyMode    string
-	LeaseSeconds  int
-	Logger        logging.Logger
-	Store         *streamers.Store
+	Client       *http.Client
+	HubURL       string
+	CallbackURL  string
+	VerifyMode   string
+	LeaseSeconds int
+	Logger       logging.Logger
+	Store        *streamers.Store
 }
 
 // FromURL parses the provided channel URL, resolves missing metadata, updates the streamer record,
@@ -134,7 +134,6 @@ func parseYouTubeURL(raw string) (handle string, channelID string, err error) {
 	channelID = strings.TrimSpace(channelID)
 	return handle, channelID, nil
 }
-
 
 func setYouTubePlatform(store *streamers.Store, streamerID string, yt streamers.YouTubePlatform) (streamers.Record, error) {
 	var updated streamers.Record

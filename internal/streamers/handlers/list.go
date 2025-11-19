@@ -4,21 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/streamers"
 )
 
-func listStreamers(w http.ResponseWriter, store *streamers.Store, logger logging.Logger) {
-	if store == nil {
-		http.Error(w, "streamers store not configured", http.StatusInternalServerError)
-		return
-	}
-	records, err := store.List()
+func (h *streamersHTTPHandler) handleList(w http.ResponseWriter, r *http.Request) {
+	records, err := h.service.List(r.Context())
 	if err != nil {
-		if logger != nil {
-			logger.Printf("failed to list streamers: %v", err)
-		}
-		http.Error(w, "failed to read streamer data", http.StatusInternalServerError)
+		h.respondError(w, err, "failed to read streamer data")
 		return
 	}
 
@@ -28,7 +20,9 @@ func listStreamers(w http.ResponseWriter, store *streamers.Store, logger logging
 	}{
 		Streamers: records,
 	}
-	if err := json.NewEncoder(w).Encode(response); err != nil && logger != nil {
-		logger.Printf("failed to encode streamers response: %v", err)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		if h.logger != nil {
+			h.logger.Printf("failed to encode streamers response: %v", err)
+		}
 	}
 }
