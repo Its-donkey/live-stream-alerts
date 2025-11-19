@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"live-stream-alerts/config"
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 )
@@ -35,12 +34,7 @@ type YouTubeRequest struct {
 	ChannelID    string
 }
 
-// SubscribeYouTube executes a WebSub subscription call against the provided or configured hub URL.
-//
-// Precedence:
-//   - HubURL / Callback / Verify from req (if non-empty)
-//   - Otherwise falls back to config.YT.HubURL / CallbackURL / Verify.
-//
+// SubscribeYouTube executes a WebSub subscription call against the provided hub URL.
 // For WebSub subscribe, Mode should be "subscribe"; for unsubscribe, "unsubscribe".
 // Verify is "sync" or "async".
 func SubscribeYouTube(
@@ -59,26 +53,20 @@ func SubscribeYouTube(
 		hc = &http.Client{Timeout: 10 * time.Second}
 	}
 
-	// Resolve hub URL: request overrides config.
+	// Resolve hub URL.
 	hubURL := strings.TrimSpace(req.HubURL)
 	if hubURL == "" {
-		hubURL = strings.TrimSpace(config.YT.HubURL)
-	}
-	if hubURL == "" {
-		return nil, nil, req, errors.New("hubURL is required but is not configured correctly in config.json")
+		return nil, nil, req, errors.New("hubURL is required")
 	}
 
 	if strings.TrimSpace(req.Topic) == "" {
 		return nil, nil, req, fmt.Errorf("%w: topic is required", ErrValidation)
 	}
 
-	// Resolve callback: request overrides config.
+	// Resolve callback.
 	callback := strings.TrimSpace(req.Callback)
 	if callback == "" {
-		callback = strings.TrimSpace(config.YT.CallbackURL)
-	}
-	if callback == "" {
-		return nil, nil, req, errors.New("callbackURL is required but is not configured correctly in config.json")
+		return nil, nil, req, errors.New("callback is required")
 	}
 
 	mode := strings.TrimSpace(req.Mode)
@@ -86,13 +74,10 @@ func SubscribeYouTube(
 		return nil, nil, req, fmt.Errorf("%w: subscribe or unsubscribe must be set as mode", ErrValidation)
 	}
 
-	// Resolve verify: request overrides config.
+	// Resolve verify.
 	verify := strings.TrimSpace(req.Verify)
 	if verify == "" {
-		verify = strings.TrimSpace(config.YT.Verify)
-	}
-	if verify == "" {
-		return nil, nil, req, errors.New("sync or async(default) must be set as verify mode")
+		return nil, nil, req, errors.New("verify mode must be set")
 	}
 
 	verifyToken := strings.TrimSpace(websub.GenerateVerifyToken())

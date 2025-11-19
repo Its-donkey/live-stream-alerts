@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"live-stream-alerts/config"
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/subscriptions"
 	"live-stream-alerts/internal/platforms/youtube/websub"
@@ -16,8 +15,12 @@ import (
 
 // SubscriptionHandlerOptions configures handlers that talk to the YouTube hub.
 type SubscriptionHandlerOptions struct {
-	Client *http.Client
-	Logger logging.Logger
+	Client       *http.Client
+	Logger       logging.Logger
+	HubURL       string
+	CallbackURL  string
+	VerifyMode   string
+	LeaseSeconds int
 }
 
 // SubscribeHandlerOptions configures the subscribe handler.
@@ -41,6 +44,12 @@ func newSubscriptionHandler(mode, logLabel string, opts SubscriptionHandlerOptio
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
+	defaults := subscriptionDefaults{
+		hubURL:      strings.TrimSpace(opts.HubURL),
+		callbackURL: strings.TrimSpace(opts.CallbackURL),
+		verifyMode:  strings.TrimSpace(opts.VerifyMode),
+		lease:       opts.LeaseSeconds,
+	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !isPostRequest(r) {
@@ -55,7 +64,7 @@ func newSubscriptionHandler(mode, logLabel string, opts SubscriptionHandlerOptio
 			return
 		}
 
-		applySubscriptionDefaults(&req, mode)
+		applySubscriptionDefaults(&req, mode, defaults)
 
 		resp, body, finalReq, err := subscriptions.SubscribeYouTube(r.Context(), client, opts.Logger, req)
 		if handled := handleSubscriptionError(w, resp, err, logLabel, opts.Logger); handled {
@@ -85,10 +94,26 @@ func decodeSubscriptionRequest(r *http.Request) (subscriptions.YouTubeRequest, V
 	return req, ValidationResult{IsValid: true}
 }
 
-func applySubscriptionDefaults(req *subscriptions.YouTubeRequest, mode string) {
+type subscriptionDefaults struct {
+	hubURL      string
+	callbackURL string
+	verifyMode  string
+	lease       int
+}
+
+func applySubscriptionDefaults(req *subscriptions.YouTubeRequest, mode string, defaults subscriptionDefaults) {
 	req.Mode = mode
+	if strings.TrimSpace(req.HubURL) == "" {
+		req.HubURL = defaults.hubURL
+	}
+	if strings.TrimSpace(req.Callback) == "" {
+		req.Callback = defaults.callbackURL
+	}
+	if strings.TrimSpace(req.Verify) == "" {
+		req.Verify = defaults.verifyMode
+	}
 	if strings.EqualFold(mode, "subscribe") && req.LeaseSeconds <= 0 {
-		req.LeaseSeconds = config.YT.LeaseSeconds
+		req.LeaseSeconds = defaults.lease
 	}
 }
 

@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"live-stream-alerts/config"
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/subscriptions"
 	"live-stream-alerts/internal/streamers"
@@ -21,6 +20,9 @@ import (
 type Options struct {
 	Client        *http.Client
 	HubURL        string
+	CallbackURL   string
+	VerifyMode    string
+	LeaseSeconds  int
 	Logger        logging.Logger
 	StreamersPath string
 }
@@ -60,16 +62,22 @@ func FromURL(ctx context.Context, record streamers.Record, channelURL string, op
 	hubSecret := generateHubSecret()
 
 	topic := fmt.Sprintf("https://www.youtube.com/xml/feeds/videos.xml?channel_id=%s", channelID)
-	callbackURL := strings.TrimSpace(config.YT.CallbackURL)
+	callbackURL := strings.TrimSpace(opts.CallbackURL)
+	if callbackURL == "" {
+		return errors.New("callback URL is required")
+	}
 	hubURL := strings.TrimSpace(opts.HubURL)
 	if hubURL == "" {
-		hubURL = strings.TrimSpace(config.YT.HubURL)
+		return errors.New("hub URL is required")
 	}
-	verifyMode := strings.TrimSpace(config.YT.Verify)
+	verifyMode := strings.TrimSpace(opts.VerifyMode)
 	if verifyMode == "" {
 		verifyMode = "async"
 	}
-	leaseSeconds := config.YT.LeaseSeconds
+	leaseSeconds := opts.LeaseSeconds
+	if leaseSeconds <= 0 {
+		return errors.New("lease seconds must be positive")
+	}
 
 	updatedRecord, err := setYouTubePlatform(opts.StreamersPath, record.Streamer.ID, streamers.YouTubePlatform{
 		Handle:       handle,
@@ -87,10 +95,11 @@ func FromURL(ctx context.Context, record streamers.Record, channelURL string, op
 
 	subscribeOpts := subscriptions.Options{
 		Client:       client,
-		HubURL:       opts.HubURL,
+		HubURL:       hubURL,
 		Logger:       opts.Logger,
 		Mode:         "subscribe",
 		LeaseSeconds: leaseSeconds,
+		Verify:       verifyMode,
 	}
 	return subscriptions.ManageSubscription(ctx, updatedRecord, subscribeOpts)
 }

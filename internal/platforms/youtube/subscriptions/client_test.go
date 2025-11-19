@@ -6,16 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"live-stream-alerts/config"
 	"live-stream-alerts/internal/platforms/youtube/websub"
 )
-
-func withConfig(t *testing.T, cfg config.YouTubeConfig) {
-	t.Helper()
-	original := config.YT
-	config.YT = cfg
-	t.Cleanup(func() { config.YT = original })
-}
 
 func TestSubscribeYouTubeSuccess(t *testing.T) {
 	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -33,14 +25,9 @@ func TestSubscribeYouTubeSuccess(t *testing.T) {
 	}))
 	defer hub.Close()
 
-	withConfig(t, config.YouTubeConfig{
-		HubURL:       hub.URL,
-		CallbackURL:  "https://callback.example.com/alerts",
-		LeaseSeconds: 120,
-		Verify:       "async",
-	})
-
 	req := YouTubeRequest{
+		HubURL:       hub.URL,
+		Callback:     "https://callback.example.com/alerts",
 		Topic:        "https://www.youtube.com/xml/feeds/videos.xml?channel_id=UC123",
 		Mode:         "subscribe",
 		Verify:       "async",
@@ -64,7 +51,6 @@ func TestSubscribeYouTubeSuccess(t *testing.T) {
 }
 
 func TestSubscribeYouTubeValidatesConfig(t *testing.T) {
-	withConfig(t, config.YouTubeConfig{}) // everything empty
 	_, _, _, err := SubscribeYouTube(context.Background(), nil, nil, YouTubeRequest{
 		Topic: "https://example",
 		Mode:  "subscribe",
@@ -81,16 +67,12 @@ func TestSubscribeYouTubePropagatesHubErrors(t *testing.T) {
 	}))
 	defer hub.Close()
 
-	withConfig(t, config.YouTubeConfig{
-		HubURL:       hub.URL,
-		CallbackURL:  "https://callback.example.com/alerts",
-		LeaseSeconds: 60,
-		Verify:       "async",
-	})
-
 	req := YouTubeRequest{
+		HubURL:       hub.URL,
+		Callback:     "https://callback.example.com/alerts",
 		Topic:        "https://example",
 		Mode:         "subscribe",
+		Verify:       "async",
 		LeaseSeconds: 60,
 	}
 

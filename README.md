@@ -32,6 +32,11 @@ The binary also reads `config.json` on startup for file-based overrides. This is
 
 ```json
 {
+  "admin": {
+    "email": "admin@sharpen.live",
+    "password": "change-me",
+    "token_ttl_seconds": 86400
+  },
   "server": {
     "addr": "127.0.0.1",
     "port": ":8880"
@@ -52,6 +57,9 @@ When `/alerts` receives a push notification, the server fetches the YouTube watc
 ### YouTube lease monitor
 The alert server continuously inspects `data/streamers.json` for YouTube subscriptions and automatically renews them when roughly 5% of the lease window remains. The renewal window is derived from `hubLeaseDate` (last hub confirmation) plus `leaseSeconds`, so keeping those fields current ensures subscriptions are re-upped before the hub expires them.
 
+### Admin authentication
+The admin console authenticates via `/api/admin/login`. Configure the allowed credentials in the `admin` block of `config.json`, and adjust `token_ttl_seconds` to control how long issued bearer tokens remain valid. Include the token using an `Authorization: Bearer <token>` header for any admin-only APIs.
+
 ## API reference
 All HTTP routes are registered in `internal/api/v1/router.go`. Update the table below whenever an endpoint is added or altered so this README remains the single source of truth.
 
@@ -63,11 +71,14 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 | POST   | `/api/youtube/channel`       | Resolves a YouTube `@handle` into its canonical channel ID. |
 | GET    | `/api/streamers`             | Returns every stored streamer record. |
 | GET    | `/api/streamers/watch`       | Streams server-sent events whenever `streamers.json` changes. |
-| POST   | `/api/streamers`             | Persists streamer metadata to `data/streamers.json`. |
+| POST   | `/api/streamers`             | Queues a streamer submission for admin review (written to `data/submissions.json`). |
 | PATCH  | `/api/streamers`             | Updates the alias/description/languages of an existing streamer. |
 | DELETE | `/api/streamers`             | Removes a stored streamer record. |
 | POST   | `/api/youtube/metadata`     | Scrapes a public URL and returns its meta description/title. |
 | GET    | `/api/server/config`         | Returns the server runtime information consumed by the UI. |
+| POST   | `/api/admin/login`          | Issues a bearer token for administrative API calls. |
+| GET    | `/api/admin/submissions`    | Lists pending streamer submissions for review. |
+| POST   | `/api/admin/submissions`    | Approves or rejects a pending submission. |
 | GET    | `/`                          | Returns placeholder text reminding you to host alGUI separately. |
 
 ### GET `/alerts`
@@ -116,8 +127,8 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 - **Usage:** Connect via EventSource in the browser and call `location.reload()` when a `change` event is received.
 
 ### POST `/api/streamers`
-- **Purpose:** Appends a streamer record to `data/streamers.json` using the schema in `schema/streamers.schema.json`.
-- **Request body:** Provide the streamer basics plus a single YouTube URL. The server derives the streamer ID, resolves the channel handle/ID, stores those fields, and subscribes to hub notifications:
+- **Purpose:** Queues a streamer submission for admin review. Payloads still follow the schema below, but the record is written to `data/submissions.json` until an administrator approves it via `/api/admin/submissions`.
+- **Request body:** Provide the streamer basics plus a single YouTube URL (optional but recommended). The values mirror the prior write-flow:
   ```json
   {
     "streamer": {
@@ -130,11 +141,10 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
     }
   }
   ```
-- **Server-managed fields:** `streamer.id` is generated automatically (random alphanumeric string), so callers never supply or rely on alias-derived identifiers. IDs, timestamps, and platform metadata are set by the server. Once the record is created it is immediately enriched with the channel handle and ID taken from the supplied URL (or by resolving the @handle), and the backend generates a fresh hub secret that it later uses for WebSub HMAC validation.
-- **YouTube subscriptions:** After the record is stored the backend resolves any missing channel metadata, saves it back to `data/streamers.json`, and issues the PubSubHubbub subscription. Failures are logged but do not block the initial `201 Created` response.
-- **Languages:** When provided, entries must come from the supported language list (see `schema/streamers.schema.json`); duplicates and blank values are rejected.
-- **Validation:** `streamer.alias` must be non-empty and unique once cleaned (submitting a duplicate alias returns `409 Conflict`). The `platforms.url` value must be a valid YouTube channel URL when provided.
-- **Response:** `201 Created` with the stored record echoed back as JSON, or `500 Internal Server Error` if the file append fails.
+- **Server-managed fields:** The backend generates a submission ID and `submittedAt` timestamp. Once an admin approves the entry it is converted into a full streamer record (assigning a permanent `streamer.id`, deriving YouTube metadata, generating a hub secret, etc.).
+- **Languages:** Entries must come from the supported language list (`schema/streamers.schema.json`); duplicates and blank values are rejected.
+- **Validation & conflicts:** `streamer.alias` must be unique across existing streamers **and** pending submissions. Submitting a duplicate alias returns `409 Conflict`.
+- **Response:** `202 Accepted` with `{ "status": "pending", "message": "Submission received..." }` when the submission is queued, or `500 Internal Server Error` if the queue write fails.
 
 ### DELETE `/api/streamers`
 - **Purpose:** Removes a streamer record (including its platform metadata) from `data/streamers.json`.
@@ -202,6 +212,54 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
   }
   ```
 - **Notes:** Only `http`/`https` URLs are allowed. A `502` is returned if scraping fails or the metadata cannot be extracted.
+
+### POST `/api/admin/login`
+- **Purpose:** Authenticates the admin console and returns a bearer token for subsequent admin-only API calls.
+- **Request body:**
+  ```json
+  {
+    "email": "admin@sharpen.live",
+    "password": "super-secret"
+  }
+  ```
+- **Response:**
+  ```json
+  {
+    "token": "<bearer token>",
+    "expiresAt": "2025-11-18T16:23:03Z"
+  }
+  ```
+- **Notes:** Supply the token via `Authorization: Bearer <token>`. Tokens expire after the configured `token_ttl_seconds` duration.
+
+### GET `/api/admin/submissions`
+- **Purpose:** Returns the list of pending streamer submissions awaiting review.
+- **Authentication:** Requires `Authorization: Bearer <token>` header obtained from `/api/admin/login`.
+- **Response:**
+  ```json
+  {
+    "submissions": [
+      {
+        "id": "sub_1731955790",
+        "alias": "Knife Maker",
+        "description": "Showcases livestream sharpening sessions.",
+        "languages": ["English"],
+        "platformUrl": "https://www.youtube.com/@knifemaker",
+        "submittedAt": "2025-11-18T16:23:03Z"
+      }
+    ]
+  }
+  ```
+
+### POST `/api/admin/submissions`
+- **Purpose:** Approves or rejects a submission, removing it from the pending list.
+- **Request body:**
+  ```json
+  {
+    "action": "approve",
+    "id": "sub_1731955790"
+  }
+  ```
+- **Notes:** `action` can be `approve` or `reject`. The response echoes the removed submission and resulting status.
 
 ### Static asset hosting
 - Requests to `/` now respond with `UI assets not configured` so deployments keep alGUI on its own host (and out of the alert server’s logs). Serve the WASM bundle from the `alGUI` project directly.

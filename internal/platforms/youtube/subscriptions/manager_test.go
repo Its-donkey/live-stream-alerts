@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"live-stream-alerts/config"
 	"live-stream-alerts/internal/streamers"
 )
 
@@ -27,17 +26,13 @@ func (m mockRoundTrip) RoundTrip(req *http.Request) (*http.Response, error) {
 	return m(req)
 }
 
-func configureTestYouTube(t *testing.T, hubURL string) {
-	t.Helper()
-	original := config.YT
-	config.YT = config.YouTubeConfig{
+func defaultOptions(hubURL string) Options {
+	return Options{
 		HubURL:       hubURL,
-		CallbackURL:  "https://callback.example.com/alerts",
-		LeaseSeconds: 60,
 		Mode:         "subscribe",
 		Verify:       "async",
+		LeaseSeconds: 60,
 	}
-	t.Cleanup(func() { config.YT = original })
 }
 
 func TestSubscribeSkipsWhenNoYouTubePlatform(t *testing.T) {
@@ -50,12 +45,13 @@ func TestSubscribeValidatesChannelID(t *testing.T) {
 	rt := mockRoundTrip(func(req *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusBadRequest, Body: io.NopCloser(strings.NewReader("fail")), Header: make(http.Header)}, nil
 	})
-	configureTestYouTube(t, "https://hub.invalid")
 	record := streamers.Record{
 		Streamer:  streamers.Streamer{Alias: "Test"},
-		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{Handle: "@test"}},
+		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{Handle: "@test", CallbackURL: "https://callback.example.com/alerts"}},
 	}
-	if err := ManageSubscription(context.Background(), record, Options{Client: &http.Client{Transport: rt}, Mode: "subscribe"}); err == nil {
+	opts := defaultOptions("https://hub.invalid")
+	opts.Client = &http.Client{Transport: rt}
+	if err := ManageSubscription(context.Background(), record, opts); err == nil {
 		t.Fatalf("expected error when channel id cannot be resolved")
 	}
 }
@@ -75,15 +71,17 @@ func TestSubscribeSuccess(t *testing.T) {
 	}))
 	defer hub.Close()
 
-	configureTestYouTube(t, hub.URL)
 	record := streamers.Record{
 		Streamer: streamers.Streamer{Alias: "Test"},
 		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{
-			ChannelID: "UC123",
-			Handle:    "@test",
+			ChannelID:   "UC123",
+			Handle:      "@test",
+			CallbackURL: "https://callback.example.com/alerts",
 		}},
 	}
-	if err := ManageSubscription(context.Background(), record, Options{Client: hub.Client(), HubURL: hub.URL, Mode: "subscribe"}); err != nil {
+	opts := defaultOptions(hub.URL)
+	opts.Client = hub.Client()
+	if err := ManageSubscription(context.Background(), record, opts); err != nil {
 		t.Fatalf("subscribe returned error: %v", err)
 	}
 }
@@ -101,22 +99,23 @@ func TestSubscribeUsesStoredLeaseSeconds(t *testing.T) {
 	}))
 	defer hub.Close()
 
-	configureTestYouTube(t, hub.URL)
 	record := streamers.Record{
 		Streamer: streamers.Streamer{Alias: "Test"},
 		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{
 			ChannelID:    "UC999",
 			LeaseSeconds: storedLease,
+			CallbackURL:  "https://callback.example.com/alerts",
 		}},
 	}
 
-	if err := ManageSubscription(context.Background(), record, Options{Client: hub.Client(), HubURL: hub.URL, Mode: "subscribe"}); err != nil {
+	opts := defaultOptions(hub.URL)
+	opts.Client = hub.Client()
+	if err := ManageSubscription(context.Background(), record, opts); err != nil {
 		t.Fatalf("subscribe returned error: %v", err)
 	}
 }
 
 func TestSubscribeUsesOptionLeaseSecondsWhenRecordMissing(t *testing.T) {
-	const configuredLease = 864000
 	const requestLease = 3600
 	hub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
@@ -128,21 +127,18 @@ func TestSubscribeUsesOptionLeaseSecondsWhenRecordMissing(t *testing.T) {
 		w.WriteHeader(http.StatusAccepted)
 	}))
 	defer hub.Close()
-
-	configureTestYouTube(t, hub.URL)
-	config.YT.LeaseSeconds = configuredLease
 	record := streamers.Record{
 		Streamer: streamers.Streamer{Alias: "Test"},
 		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{
-			ChannelID: "UC777",
+			ChannelID:   "UC777",
+			CallbackURL: "https://callback.example.com/alerts",
 		}},
 	}
 
-	if err := ManageSubscription(
-		context.Background(),
-		record,
-		Options{Client: hub.Client(), HubURL: hub.URL, Mode: "subscribe", LeaseSeconds: requestLease},
-	); err != nil {
+	opts := defaultOptions(hub.URL)
+	opts.Client = hub.Client()
+	opts.LeaseSeconds = requestLease
+	if err := ManageSubscription(context.Background(), record, opts); err != nil {
 		t.Fatalf("subscribe returned error: %v", err)
 	}
 }
@@ -158,15 +154,16 @@ func TestSubscribeResolvesChannelIDFromHandle(t *testing.T) {
 		return resp, nil
 	})}
 
-	configureTestYouTube(t, "https://hub")
 	record := streamers.Record{
 		Streamer: streamers.Streamer{Alias: "Test"},
 		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{
-			Handle: "example",
+			Handle:      "example",
+			CallbackURL: "https://callback.example.com/alerts",
 		}},
 	}
-
-	if err := ManageSubscription(context.Background(), record, Options{Client: client, Mode: "subscribe"}); err != nil {
+	opts := defaultOptions("https://hub.example.com")
+	opts.Client = client
+	if err := ManageSubscription(context.Background(), record, opts); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -183,15 +180,18 @@ func TestUnsubscribeOmitsLeaseSeconds(t *testing.T) {
 	}))
 	defer hub.Close()
 
-	configureTestYouTube(t, hub.URL)
 	record := streamers.Record{
 		Streamer: streamers.Streamer{Alias: "Test"},
 		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{
-			ChannelID: "UC123",
+			ChannelID:   "UC123",
+			CallbackURL: "https://callback.example.com/alerts",
 		}},
 	}
 
-	if err := ManageSubscription(context.Background(), record, Options{Client: hub.Client(), HubURL: hub.URL, Mode: "unsubscribe"}); err != nil {
+	opts := defaultOptions(hub.URL)
+	opts.Client = hub.Client()
+	opts.Mode = "unsubscribe"
+	if err := ManageSubscription(context.Background(), record, opts); err != nil {
 		t.Fatalf("unsubscribe returned error: %v", err)
 	}
 }
@@ -218,7 +218,6 @@ func TestUnsubscribeUsesStoredContext(t *testing.T) {
 	}))
 	defer hub.Close()
 
-	configureTestYouTube(t, "https://config-hub.example.com")
 	record := streamers.Record{
 		Streamer: streamers.Streamer{Alias: "Test"},
 		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{
@@ -231,11 +230,10 @@ func TestUnsubscribeUsesStoredContext(t *testing.T) {
 		}},
 	}
 
-	if err := ManageSubscription(
-		context.Background(),
-		record,
-		Options{Client: hub.Client(), HubURL: "https://ignored", Mode: "unsubscribe"},
-	); err != nil {
+	opts := defaultOptions("https://ignored")
+	opts.Client = hub.Client()
+	opts.Mode = "unsubscribe"
+	if err := ManageSubscription(context.Background(), record, opts); err != nil {
 		t.Fatalf("unsubscribe returned error: %v", err)
 	}
 }
