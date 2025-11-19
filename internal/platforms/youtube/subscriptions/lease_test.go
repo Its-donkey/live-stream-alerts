@@ -11,6 +11,7 @@ import (
 func TestRecordLeaseUpdatesFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "streamers.json")
+	store := streamers.NewStore(path)
 	record := streamers.Record{
 		Streamer: streamers.Streamer{
 			Alias:     "Example",
@@ -20,16 +21,16 @@ func TestRecordLeaseUpdatesFile(t *testing.T) {
 		},
 		Platforms: streamers.Platforms{YouTube: &streamers.YouTubePlatform{ChannelID: "UC555", Handle: "@example"}},
 	}
-	if _, err := streamers.Append(path, record); err != nil {
+	if _, err := store.Append(record); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 
 	verifiedAt := time.Now().UTC()
-	if err := RecordLease(path, "UC555", verifiedAt); err != nil {
+	if err := RecordLease(store, "UC555", verifiedAt); err != nil {
 		t.Fatalf("record lease: %v", err)
 	}
 
-	records, err := streamers.List(path)
+	records, err := store.List()
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -38,8 +39,9 @@ func TestRecordLeaseUpdatesFile(t *testing.T) {
 	}
 }
 
+
 func TestRecordLeaseValidatesInput(t *testing.T) {
-	if err := RecordLease("", "", time.Now()); err == nil {
+	if err := RecordLease(nil, "", time.Now()); err == nil {
 		t.Fatalf("expected error when channel ID missing")
 	}
 }

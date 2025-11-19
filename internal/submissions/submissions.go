@@ -16,10 +16,16 @@ const (
 )
 
 var (
-	fileMu sync.Mutex
 	// ErrNotFound is returned when a submission ID cannot be located.
 	ErrNotFound = errors.New("submission not found")
 )
+
+type Store struct {
+	path string
+	mu   sync.Mutex
+}
+
+var storeCache sync.Map
 
 // File represents the on-disk submissions format.
 type File struct {
@@ -38,9 +44,51 @@ type Submission struct {
 	SubmittedBy string    `json:"submittedBy,omitempty"`
 }
 
+// NewStore returns a file-backed submissions store for the provided path.
+func NewStore(path string) *Store {
+	if path == "" {
+		path = DefaultFilePath
+	}
+	return &Store{path: filepath.Clean(path)}
+}
+
+// Path returns the path backing the store.
+func (s *Store) Path() string {
+	if s == nil {
+		return ""
+	}
+	return s.path
+}
+
+func storeForPath(path string) *Store {
+	if path == "" {
+		path = DefaultFilePath
+	}
+	cleaned := filepath.Clean(path)
+	if existing, ok := storeCache.Load(cleaned); ok {
+		return existing.(*Store)
+	}
+	store := &Store{path: cleaned}
+	actual, _ := storeCache.LoadOrStore(cleaned, store)
+	return actual.(*Store)
+}
+
+func (s *Store) readFileLocked() (File, error) {
+	return readFile(s.path)
+}
+
+func (s *Store) writeFileLocked(file File) error {
+	return writeFile(s.path, file)
+}
+
 // List returns every submission recorded at the provided path.
-func List(path string) ([]Submission, error) {
-	file, err := readFile(path)
+func (s *Store) List() ([]Submission, error) {
+	if s == nil {
+		return nil, errors.New("submissions store is nil")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	file, err := s.readFileLocked()
 	if err != nil {
 		return nil, err
 	}
@@ -49,12 +97,19 @@ func List(path string) ([]Submission, error) {
 	return out, nil
 }
 
-// Remove deletes the submission with the specified ID and returns it.
-func Remove(path, id string) (Submission, error) {
-	fileMu.Lock()
-	defer fileMu.Unlock()
+// List returns submissions using a shared store derived from the provided path.
+func List(path string) ([]Submission, error) {
+	return storeForPath(path).List()
+}
 
-	file, err := readFile(path)
+// Remove deletes the submission with the specified ID and returns it.
+func (s *Store) Remove(id string) (Submission, error) {
+	if s == nil {
+		return Submission{}, errors.New("submissions store is nil")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	file, err := s.readFileLocked()
 	if err != nil {
 		return Submission{}, err
 	}
@@ -68,21 +123,27 @@ func Remove(path, id string) (Submission, error) {
 	if idx == -1 {
 		return Submission{}, ErrNotFound
 	}
-
 	removed := file.Submissions[idx]
 	file.Submissions = append(file.Submissions[:idx], file.Submissions[idx+1:]...)
-	if err := writeFile(path, file); err != nil {
+	if err := s.writeFileLocked(file); err != nil {
 		return Submission{}, err
 	}
 	return removed, nil
 }
 
-// Append stores a new submission entry.
-func Append(path string, submission Submission) (Submission, error) {
-	fileMu.Lock()
-	defer fileMu.Unlock()
+// Remove deletes the submission using a shared store derived from the path.
+func Remove(path, id string) (Submission, error) {
+	return storeForPath(path).Remove(id)
+}
 
-	file, err := readFile(path)
+// Append stores a new submission entry.
+func (s *Store) Append(submission Submission) (Submission, error) {
+	if s == nil {
+		return Submission{}, errors.New("submissions store is nil")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	file, err := s.readFileLocked()
 	if err != nil {
 		return Submission{}, err
 	}
@@ -94,10 +155,15 @@ func Append(path string, submission Submission) (Submission, error) {
 		copy.SubmittedAt = time.Now().UTC()
 	}
 	file.Submissions = append(file.Submissions, copy)
-	if err := writeFile(path, file); err != nil {
+	if err := s.writeFileLocked(file); err != nil {
 		return Submission{}, err
 	}
 	return copy, nil
+}
+
+// Append stores a submission using a shared store derived from the provided path.
+func Append(path string, submission Submission) (Submission, error) {
+	return storeForPath(path).Append(submission)
 }
 
 func readFile(path string) (File, error) {

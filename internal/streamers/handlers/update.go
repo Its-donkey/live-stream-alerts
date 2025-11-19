@@ -19,10 +19,14 @@ type patchRequest struct {
 	} `json:"streamer"`
 }
 
-func updateStreamer(w http.ResponseWriter, r *http.Request, path string, logger logging.Logger) {
+func updateStreamer(w http.ResponseWriter, r *http.Request, store *streamers.Store, logger logging.Logger) {
 	if r.Method != http.MethodPatch {
 		w.Header().Set("Allow", http.MethodPatch)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if store == nil {
+		http.Error(w, "streamers store not configured", http.StatusInternalServerError)
 		return
 	}
 
@@ -74,7 +78,7 @@ func updateStreamer(w http.ResponseWriter, r *http.Request, path string, logger 
 		return
 	}
 
-	record, err := streamers.Update(path, update)
+	record, err := store.Update(update)
 	if err != nil {
 		switch {
 		case errors.Is(err, streamers.ErrStreamerNotFound):

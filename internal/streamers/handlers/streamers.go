@@ -3,7 +3,6 @@ package handlers
 import (
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,23 +13,22 @@ import (
 
 // StreamOptions configures the streamer handler.
 type StreamOptions struct {
-	FilePath        string
-	Logger          logging.Logger
-	YouTubeClient   *http.Client
-	YouTubeHubURL   string
-	SubmissionsPath string
+	Store            *streamers.Store
+	Logger           logging.Logger
+	YouTubeClient    *http.Client
+	YouTubeHubURL    string
+	SubmissionsStore *submissions.Store
 }
 
 // StreamersHandler returns a handler for GET/POST /api/streamers.
 func StreamersHandler(opts StreamOptions) http.Handler {
-	path := opts.FilePath
-	if path == "" {
-		path = streamers.DefaultFilePath
+	store := opts.Store
+	if store == nil {
+		store = streamers.NewStore(streamers.DefaultFilePath)
 	}
-	path = filepath.Clean(path)
-	submissionsPath := strings.TrimSpace(opts.SubmissionsPath)
-	if submissionsPath == "" {
-		submissionsPath = submissions.DefaultFilePath
+	submissionsStore := opts.SubmissionsStore
+	if submissionsStore == nil {
+		submissionsStore = submissions.NewStore(submissions.DefaultFilePath)
 	}
 
 	youtubeClient := opts.YouTubeClient
@@ -42,16 +40,16 @@ func StreamersHandler(opts StreamOptions) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			listStreamers(w, path, opts.Logger)
+			listStreamers(w, store, opts.Logger)
 			return
 		case http.MethodPost:
-			createStreamer(w, r, path, submissionsPath, opts.Logger)
+			createStreamer(w, r, store, submissionsStore, opts.Logger)
 			return
 		case http.MethodPatch:
-			updateStreamer(w, r, path, opts.Logger)
+			updateStreamer(w, r, store, opts.Logger)
 			return
 		case http.MethodDelete:
-			deleteStreamer(w, r, path, opts.Logger, youtubeClient, youtubeHubURL)
+			deleteStreamer(w, r, store, opts.Logger, youtubeClient, youtubeHubURL)
 			return
 		default:
 			w.Header().Set("Allow", fmt.Sprintf("%s, %s, %s, %s", http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodDelete))

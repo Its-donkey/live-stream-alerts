@@ -169,14 +169,16 @@ func TestUpdateFileValidatesInputs(t *testing.T) {
 }
 
 func TestAppendValidatesPath(t *testing.T) {
-	if _, err := Append("", Record{}); err == nil {
-		t.Fatalf("expected error for empty path")
+	var store *Store
+	if _, err := store.Append(Record{}); err == nil {
+		t.Fatalf("expected error for nil store")
 	}
 }
 
 func TestListValidatesPath(t *testing.T) {
-	if _, err := List(""); err == nil {
-		t.Fatalf("expected error for empty path")
+	var store *Store
+	if _, err := store.List(); err == nil {
+		t.Fatalf("expected error for nil store")
 	}
 }
 

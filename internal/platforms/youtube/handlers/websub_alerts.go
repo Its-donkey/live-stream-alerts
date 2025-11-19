@@ -13,12 +13,14 @@ import (
 	"live-stream-alerts/internal/logging"
 	youtubesub "live-stream-alerts/internal/platforms/youtube/subscriptions"
 	"live-stream-alerts/internal/platforms/youtube/websub"
+	"live-stream-alerts/internal/streamers"
 )
 
 // SubscriptionConfirmationOptions configures how hub verification requests are handled.
 type SubscriptionConfirmationOptions struct {
 	Logger        logging.Logger
 	StreamersPath string
+	StreamersStore *streamers.Store
 }
 
 type hubRequest struct {
@@ -67,7 +69,7 @@ func HandleSubscriptionConfirmation(w http.ResponseWriter, r *http.Request, opts
 	logPlannedResponse(logger, w, req.Challenge)
 
 	verifiedAt := time.Now().UTC()
-	channelID := updateLeaseIfNeeded(req, exp, opts.StreamersPath, verifiedAt, logger)
+	channelID := updateLeaseIfNeeded(req, exp, opts.StreamersStore, verifiedAt, logger)
 
 	finalExp := finalizeExpectation(req.VerifyToken, exp)
 
@@ -174,14 +176,14 @@ func logPlannedResponse(logger logging.Logger, w http.ResponseWriter, challenge 
 	logger.Printf("Planned hub response:\n%s", responseDump.String())
 }
 
-func updateLeaseIfNeeded(req hubRequest, exp websub.Expectation, streamersPath string, verifiedAt time.Time, logger logging.Logger) string {
+func updateLeaseIfNeeded(req hubRequest, exp websub.Expectation, store *streamers.Store, verifiedAt time.Time, logger logging.Logger) string {
 	channelID := exp.ChannelID
 	if channelID == "" {
 		channelID = websub.ExtractChannelID(req.Topic)
 	}
 
 	if channelID != "" && !req.IsUnsubscribe() && req.LeaseProvided {
-		if err := youtubesub.RecordLease(streamersPath, channelID, verifiedAt); err != nil && logger != nil {
+		if err := youtubesub.RecordLease(store, channelID, verifiedAt); err != nil && logger != nil {
 			logger.Printf("failed to record hub lease for %s: %v", channelID, err)
 		}
 	}

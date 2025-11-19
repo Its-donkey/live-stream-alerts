@@ -24,7 +24,7 @@ type Options struct {
 	VerifyMode    string
 	LeaseSeconds  int
 	Logger        logging.Logger
-	StreamersPath string
+	Store         *streamers.Store
 }
 
 // FromURL parses the provided channel URL, resolves missing metadata, updates the streamer record,
@@ -34,8 +34,9 @@ func FromURL(ctx context.Context, record streamers.Record, channelURL string, op
 	if channelURL == "" {
 		return errors.New("channel URL is required")
 	}
-	if opts.StreamersPath == "" {
-		return errors.New("streamers path is required")
+	store := opts.Store
+	if store == nil {
+		return errors.New("streamers store is required")
 	}
 
 	handle, channelID, err := parseYouTubeURL(channelURL)
@@ -79,7 +80,7 @@ func FromURL(ctx context.Context, record streamers.Record, channelURL string, op
 		return errors.New("lease seconds must be positive")
 	}
 
-	updatedRecord, err := setYouTubePlatform(opts.StreamersPath, record.Streamer.ID, streamers.YouTubePlatform{
+	updatedRecord, err := setYouTubePlatform(store, record.Streamer.ID, streamers.YouTubePlatform{
 		Handle:       handle,
 		ChannelID:    channelID,
 		HubSecret:    hubSecret,
@@ -134,9 +135,10 @@ func parseYouTubeURL(raw string) (handle string, channelID string, err error) {
 	return handle, channelID, nil
 }
 
-func setYouTubePlatform(path string, streamerID string, yt streamers.YouTubePlatform) (streamers.Record, error) {
+
+func setYouTubePlatform(store *streamers.Store, streamerID string, yt streamers.YouTubePlatform) (streamers.Record, error) {
 	var updated streamers.Record
-	err := streamers.UpdateFile(path, func(file *streamers.File) error {
+	err := store.UpdateFile(func(file *streamers.File) error {
 		for i := range file.Records {
 			if !strings.EqualFold(file.Records[i].Streamer.ID, streamerID) {
 				continue
