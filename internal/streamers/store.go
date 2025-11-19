@@ -110,11 +110,100 @@ type TwitchPlatform struct {
 }
 
 var (
-	fileMu                 sync.Mutex
 	ErrDuplicateStreamerID = errors.New("streamer id already exists")
 	ErrStreamerNotFound    = errors.New("streamer not found")
 	ErrDuplicateAlias      = errors.New("streamer alias already exists")
 )
+
+type Store struct {
+	path string
+	mu   sync.Mutex
+}
+
+var storeCache sync.Map
+
+// NewStore returns a file-backed store for the provided path.
+func NewStore(path string) *Store {
+	if path == "" {
+		path = DefaultFilePath
+	}
+	return &Store{path: filepath.Clean(path)}
+}
+
+// Path returns the file path backing the store.
+func (s *Store) Path() string {
+	if s == nil {
+		return ""
+	}
+	return s.path
+}
+
+func storeForPath(path string) *Store {
+	if path == "" {
+		path = DefaultFilePath
+	}
+	cleaned := filepath.Clean(path)
+	if existing, ok := storeCache.Load(cleaned); ok {
+		return existing.(*Store)
+	}
+	store := &Store{path: cleaned}
+	actual, _ := storeCache.LoadOrStore(cleaned, store)
+	return actual.(*Store)
+}
+
+func (s *Store) ensureDir() error {
+	if s == nil {
+		return errors.New("streamers store is nil")
+	}
+	return os.MkdirAll(filepath.Dir(s.path), 0o755)
+}
+
+func (s *Store) readFileLocked() (File, error) {
+	var fileData File
+	data, err := os.ReadFile(s.path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fileData = File{SchemaRef: DefaultSchemaPath, Records: []Record{}}
+			return fileData, nil
+		}
+		return File{}, fmt.Errorf("read streamers file: %w", err)
+	}
+
+	if len(data) == 0 {
+		fileData = File{SchemaRef: DefaultSchemaPath, Records: []Record{}}
+		return fileData, nil
+	}
+
+	if err := json.Unmarshal(data, &fileData); err != nil {
+		return File{}, fmt.Errorf("parse streamers file: %w", err)
+	}
+	return fileData, nil
+}
+
+func (s *Store) writeFileLocked(file File) error {
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+		return fmt.Errorf("create streamers dir: %w", err)
+	}
+	encoded, err := json.MarshalIndent(file, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode streamers file: %w", err)
+	}
+	if err := os.WriteFile(s.path, encoded, 0o644); err != nil {
+		return fmt.Errorf("write streamers file: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) updateFileLocked(updateFn func(*File) error) error {
+	fileData, err := s.readFileLocked()
+	if err != nil {
+		return err
+	}
+	if err := updateFn(&fileData); err != nil {
+		return err
+	}
+	return s.writeFileLocked(fileData)
+}
 
 // UpdateFields describes the mutable streamer fields.
 type UpdateFields struct {
@@ -125,19 +214,18 @@ type UpdateFields struct {
 }
 
 // Append adds a new streamer record to disk and returns a copy with timestamps populated.
-func Append(path string, record Record) (Record, error) {
-	if path == "" {
-		return Record{}, errors.New("streamers file path is required")
+func (s *Store) Append(record Record) (Record, error) {
+	if s == nil {
+		return Record{}, errors.New("streamers store is nil")
 	}
-
-	fileMu.Lock()
-	defer fileMu.Unlock()
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := s.ensureDir(); err != nil {
 		return Record{}, fmt.Errorf("create streamers dir: %w", err)
 	}
 
-	fileData, err := readFile(path)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	fileData, err := s.readFileLocked()
 	if err != nil {
 		return Record{}, err
 	}
@@ -163,36 +251,37 @@ func Append(path string, record Record) (Record, error) {
 	}
 
 	fileData.Records = append(fileData.Records, record)
-
-	encoded, err := json.MarshalIndent(fileData, "", "  ")
-	if err != nil {
-		return Record{}, fmt.Errorf("encode streamers file: %w", err)
+	if err := s.writeFileLocked(fileData); err != nil {
+		return Record{}, err
 	}
-
-	if err := os.WriteFile(path, encoded, 0o644); err != nil {
-		return Record{}, fmt.Errorf("write streamers file: %w", err)
-	}
-
 	return record, nil
 }
 
+// Append adds a new streamer record using a shared store derived from the path.
+func Append(path string, record Record) (Record, error) {
+	return storeForPath(path).Append(record)
+}
+
 // List loads all streamer records from disk.
-func List(path string) ([]Record, error) {
-	if path == "" {
-		return nil, errors.New("streamers file path is required")
+func (s *Store) List() ([]Record, error) {
+	if s == nil {
+		return nil, errors.New("streamers store is nil")
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	fileMu.Lock()
-	defer fileMu.Unlock()
-
-	fileData, err := readFile(path)
+	fileData, err := s.readFileLocked()
 	if err != nil {
 		return nil, err
 	}
-
 	records := make([]Record, len(fileData.Records))
 	copy(records, fileData.Records)
 	return records, nil
+}
+
+// List loads all streamer records for the provided path using a shared store instance.
+func List(path string) ([]Record, error) {
+	return storeForPath(path).List()
 }
 
 // YouTubeLiveStatus describes the live state to persist for a YouTube channel.
@@ -203,17 +292,18 @@ type YouTubeLiveStatus struct {
 }
 
 // UpdateYouTubeLiveStatus updates the stored status for the streamer owning the channel ID.
-func UpdateYouTubeLiveStatus(path, channelID string, liveStatus YouTubeLiveStatus) (Record, error) {
-	if path == "" {
-		return Record{}, errors.New("streamers file path is required")
+func (s *Store) UpdateYouTubeLiveStatus(channelID string, liveStatus YouTubeLiveStatus) (Record, error) {
+	if s == nil {
+		return Record{}, errors.New("streamers store is nil")
 	}
 	ch := strings.TrimSpace(channelID)
 	if ch == "" {
 		return Record{}, errors.New("channel id is required")
 	}
-
 	var updated Record
-	err := UpdateFile(path, func(file *File) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	err := s.updateFileLocked(func(file *File) error {
 		for i := range file.Records {
 			yt := file.Records[i].Platforms.YouTube
 			if yt == nil || !strings.EqualFold(yt.ChannelID, ch) {
@@ -230,6 +320,11 @@ func UpdateYouTubeLiveStatus(path, channelID string, liveStatus YouTubeLiveStatu
 		return Record{}, err
 	}
 	return updated, nil
+}
+
+// UpdateYouTubeLiveStatus updates the stored status using a shared store instance derived from the provided path.
+func UpdateYouTubeLiveStatus(path, channelID string, liveStatus YouTubeLiveStatus) (Record, error) {
+	return storeForPath(path).UpdateYouTubeLiveStatus(channelID, liveStatus)
 }
 
 func applyYouTubeStatus(record *Record, liveStatus YouTubeLiveStatus) {
@@ -295,9 +390,9 @@ func removePlatform(platforms []string, platform string) []string {
 }
 
 // Update applies modifications to an existing streamer.
-func Update(path string, fields UpdateFields) (Record, error) {
-	if path == "" {
-		return Record{}, errors.New("streamers file path is required")
+func (s *Store) Update(fields UpdateFields) (Record, error) {
+	if s == nil {
+		return Record{}, errors.New("streamers store is nil")
 	}
 	id := strings.TrimSpace(fields.StreamerID)
 	if id == "" {
@@ -308,7 +403,9 @@ func Update(path string, fields UpdateFields) (Record, error) {
 	}
 
 	var updated Record
-	err := UpdateFile(path, func(file *File) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	err := s.updateFileLocked(func(file *File) error {
 		for i := range file.Records {
 			if !strings.EqualFold(file.Records[i].Streamer.ID, id) {
 				continue
@@ -334,49 +431,41 @@ func Update(path string, fields UpdateFields) (Record, error) {
 	return updated, nil
 }
 
+// Update applies modifications using a shared store derived from the provided path.
+func Update(path string, fields UpdateFields) (Record, error) {
+	return storeForPath(path).Update(fields)
+}
+
 // UpdateFile reads the streamers file, applies the provided mutation, and writes it back to disk atomically.
-func UpdateFile(path string, updateFn func(*File) error) error {
-	if path == "" {
-		return errors.New("streamers file path is required")
+func (s *Store) UpdateFile(updateFn func(*File) error) error {
+	if s == nil {
+		return errors.New("streamers store is nil")
 	}
 	if updateFn == nil {
 		return errors.New("updateFn is required")
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.updateFileLocked(updateFn)
+}
 
-	fileMu.Lock()
-	defer fileMu.Unlock()
-
-	fileData, err := readFile(path)
-	if err != nil {
-		return err
-	}
-
-	if err := updateFn(&fileData); err != nil {
-		return err
-	}
-
-	encoded, err := json.MarshalIndent(fileData, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode streamers file: %w", err)
-	}
-
-	if err := os.WriteFile(path, encoded, 0o644); err != nil {
-		return fmt.Errorf("write streamers file: %w", err)
-	}
-	return nil
+// UpdateFile reads and updates the file for the provided path using a shared store instance.
+func UpdateFile(path string, updateFn func(*File) error) error {
+	return storeForPath(path).UpdateFile(updateFn)
 }
 
 // Delete removes a streamer by ID.
-func Delete(path, streamerID string) error {
-	if path == "" {
-		return errors.New("streamers file path is required")
+func (s *Store) Delete(streamerID string) error {
+	if s == nil {
+		return errors.New("streamers store is nil")
 	}
 	streamerID = strings.TrimSpace(streamerID)
 	if streamerID == "" {
 		return errors.New("streamer id is required")
 	}
-
-	return UpdateFile(path, func(file *File) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.updateFileLocked(func(file *File) error {
 		for i := range file.Records {
 			if strings.EqualFold(file.Records[i].Streamer.ID, streamerID) {
 				file.Records = append(file.Records[:i], file.Records[i+1:]...)
@@ -387,24 +476,26 @@ func Delete(path, streamerID string) error {
 	})
 }
 
+// Delete removes a streamer by ID for the provided path using a shared store instance.
+func Delete(path, streamerID string) error {
+	return storeForPath(path).Delete(streamerID)
+}
+
 // Get returns a single streamer record by ID.
-func Get(path, streamerID string) (Record, error) {
-	if path == "" {
-		return Record{}, errors.New("streamers file path is required")
+func (s *Store) Get(streamerID string) (Record, error) {
+	if s == nil {
+		return Record{}, errors.New("streamers store is nil")
 	}
 	streamerID = strings.TrimSpace(streamerID)
 	if streamerID == "" {
 		return Record{}, errors.New("streamer id is required")
 	}
-
-	fileMu.Lock()
-	defer fileMu.Unlock()
-
-	fileData, err := readFile(path)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fileData, err := s.readFileLocked()
 	if err != nil {
 		return Record{}, err
 	}
-
 	for _, record := range fileData.Records {
 		if strings.EqualFold(record.Streamer.ID, streamerID) {
 			return record, nil
@@ -413,9 +504,14 @@ func Get(path, streamerID string) (Record, error) {
 	return Record{}, fmt.Errorf("%w: %s", ErrStreamerNotFound, streamerID)
 }
 
+// Get returns a record using a shared store derived from the provided path.
+func Get(path, streamerID string) (Record, error) {
+	return storeForPath(path).Get(streamerID)
+}
+
 // SetYouTubeLive marks the streamer associated with the provided channel ID as live.
-func SetYouTubeLive(path, channelID, videoID string, startedAt time.Time) (Record, error) {
-	return updateYouTubeStatus(path, channelID, func(status *Status) {
+func (s *Store) SetYouTubeLive(channelID, videoID string, startedAt time.Time) (Record, error) {
+	return s.updateYouTubeStatus(channelID, func(status *Status) {
 		if status.YouTube == nil {
 			status.YouTube = &YouTubeStatus{}
 		}
@@ -432,8 +528,8 @@ func SetYouTubeLive(path, channelID, videoID string, startedAt time.Time) (Recor
 }
 
 // ClearYouTubeLive marks the YouTube platform as offline for the matching channel ID.
-func ClearYouTubeLive(path, channelID string) (Record, error) {
-	return updateYouTubeStatus(path, channelID, func(status *Status) {
+func (s *Store) ClearYouTubeLive(channelID string) (Record, error) {
+	return s.updateYouTubeStatus(channelID, func(status *Status) {
 		if status.YouTube == nil {
 			status.YouTube = &YouTubeStatus{}
 		}
@@ -444,18 +540,30 @@ func ClearYouTubeLive(path, channelID string) (Record, error) {
 	})
 }
 
+// SetYouTubeLive marks the streamer as live using a shared store derived from path.
+func SetYouTubeLive(path, channelID, videoID string, startedAt time.Time) (Record, error) {
+	return storeForPath(path).SetYouTubeLive(channelID, videoID, startedAt)
+}
+
+// ClearYouTubeLive marks the streamer as offline using a shared store.
+func ClearYouTubeLive(path, channelID string) (Record, error) {
+	return storeForPath(path).ClearYouTubeLive(channelID)
+}
+
 const platformYouTube = "youtube"
 
-func updateYouTubeStatus(path, channelID string, updateFn func(*Status)) (Record, error) {
-	if path == "" {
-		return Record{}, errors.New("streamers file path is required")
+func (s *Store) updateYouTubeStatus(channelID string, updateFn func(*Status)) (Record, error) {
+	if s == nil {
+		return Record{}, errors.New("streamers store is nil")
 	}
 	channelID = strings.TrimSpace(channelID)
 	if channelID == "" {
 		return Record{}, errors.New("youtube channel id is required")
 	}
 	var updated Record
-	err := UpdateFile(path, func(file *File) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	err := s.updateFileLocked(func(file *File) error {
 		for i := range file.Records {
 			yt := file.Records[i].Platforms.YouTube
 			if !channelMatches(yt, channelID) {

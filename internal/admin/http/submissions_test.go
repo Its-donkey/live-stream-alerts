@@ -24,15 +24,17 @@ func TestSubmissionsHandlerList(t *testing.T) {
 		{ID: "1", Alias: "Test", SubmittedAt: time.Now().UTC()},
 	}}
 	writeSubmissionsFile(t, path, data)
+	submissionsStore := submissions.NewStore(path)
+	streamersStore := streamers.NewStore(filepath.Join(dir, "streamers.json"))
 
 	mgr := adminauth.NewManager(adminauth.Config{Email: "admin@example.com", Password: "secret"})
 	token, _ := mgr.Login("admin@example.com", "secret")
 
 	handler := adminhttp.NewSubmissionsHandler(adminhttp.SubmissionsHandlerOptions{
-		Manager:       mgr,
-		FilePath:      path,
-		StreamersPath: filepath.Join(dir, "streamers.json"),
-		YouTube:       testAdminYouTubeConfig(),
+		Manager:          mgr,
+		SubmissionsStore: submissionsStore,
+		StreamersStore:   streamersStore,
+		YouTube:          testAdminYouTubeConfig(),
 	})
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/submissions", nil)
 	req.Header.Set("Authorization", "Bearer "+token.Value)
@@ -57,16 +59,18 @@ func TestSubmissionsHandlerApprove(t *testing.T) {
 	data := submissions.File{Submissions: []submissions.Submission{
 		{ID: "1", Alias: "Test", SubmittedAt: time.Now().UTC()},
 	}}
-	writeSubmissionsFile(t, path, data)
+writeSubmissionsFile(t, path, data)
 
-	mgr := adminauth.NewManager(adminauth.Config{Email: "admin@example.com", Password: "secret"})
-	token, _ := mgr.Login("admin@example.com", "secret")
-	streamersPath := filepath.Join(dir, "streamers.json")
+mgr := adminauth.NewManager(adminauth.Config{Email: "admin@example.com", Password: "secret"})
+token, _ := mgr.Login("admin@example.com", "secret")
+streamersPath := filepath.Join(dir, "streamers.json")
+submissionsStore := submissions.NewStore(path)
+streamersStore := streamers.NewStore(streamersPath)
 	handler := adminhttp.NewSubmissionsHandler(adminhttp.SubmissionsHandlerOptions{
-		Manager:       mgr,
-		FilePath:      path,
-		StreamersPath: streamersPath,
-		YouTube:       testAdminYouTubeConfig(),
+		Manager:          mgr,
+		SubmissionsStore: submissionsStore,
+		StreamersStore:   streamersStore,
+		YouTube:          testAdminYouTubeConfig(),
 	})
 
 	body, _ := json.Marshal(map[string]string{"action": "approve", "id": "1"})
@@ -86,7 +90,7 @@ func TestSubmissionsHandlerApprove(t *testing.T) {
 		t.Fatalf("expected status approved, got %v", resp["status"])
 	}
 
-	remaining, err := submissions.List(path)
+	remaining, err := submissionsStore.List()
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -94,7 +98,7 @@ func TestSubmissionsHandlerApprove(t *testing.T) {
 		t.Fatalf("expected submissions cleared, got %d", len(remaining))
 	}
 
-	records, err := streamers.List(streamersPath)
+	records, err := streamersStore.List()
 	if err != nil {
 		t.Fatalf("list streamers: %v", err)
 	}

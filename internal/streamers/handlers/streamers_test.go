@@ -29,7 +29,9 @@ func TestStreamersHandlerGetListsStreamers(t *testing.T) {
 		}
 	}
 
-	handler := StreamersHandler(StreamOptions{FilePath: path, SubmissionsPath: submissionsPath})
+ store := streamers.NewStore(path)
+ submissionStore := submissions.NewStore(submissionsPath)
+ handler := StreamersHandler(StreamOptions{Store: store, SubmissionsStore: submissionStore})
 	req := httptest.NewRequest(http.MethodGet, "/api/streamers", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -50,10 +52,10 @@ func TestStreamersHandlerGetListsStreamers(t *testing.T) {
 
 func TestStreamersHandlerPostValidation(t *testing.T) {
 	dir := t.TempDir()
-	handler := StreamersHandler(StreamOptions{
-		FilePath:        filepath.Join(dir, "streamers.json"),
-		SubmissionsPath: filepath.Join(dir, "submissions.json"),
-	})
+handler := StreamersHandler(StreamOptions{
+	Store:            streamers.NewStore(filepath.Join(dir, "streamers.json")),
+	SubmissionsStore: submissions.NewStore(filepath.Join(dir, "submissions.json")),
+})
 	req := httptest.NewRequest(http.MethodPost, "/api/streamers", bytes.NewBufferString("not json"))
 	rr := httptest.NewRecorder()
 
@@ -68,7 +70,7 @@ func TestStreamersHandlerPostSuccess(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "streamers.json")
 	submissionsPath := filepath.Join(dir, "submissions.json")
-	handler := StreamersHandler(StreamOptions{FilePath: path, SubmissionsPath: submissionsPath})
+handler := StreamersHandler(StreamOptions{Store: streamers.NewStore(path), SubmissionsStore: submissions.NewStore(submissionsPath)})
 
 	payload := map[string]any{
 		"streamer": map[string]any{
@@ -119,7 +121,7 @@ func TestStreamersHandlerPostDuplicateAlias(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "streamers.json")
 	submissionsPath := filepath.Join(dir, "submissions.json")
-	handler := StreamersHandler(StreamOptions{FilePath: path, SubmissionsPath: submissionsPath})
+handler := StreamersHandler(StreamOptions{Store: streamers.NewStore(path), SubmissionsStore: submissions.NewStore(submissionsPath)})
 
 	first := map[string]any{
 		"streamer": map[string]any{
@@ -191,12 +193,12 @@ func TestStreamersHandlerDeleteSuccess(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	handler := StreamersHandler(StreamOptions{
-		FilePath:        path,
-		SubmissionsPath: filepath.Join(dir, "submissions.json"),
-		YouTubeClient:   hub.Client(),
-		YouTubeHubURL:   hub.URL,
-	})
+handler := StreamersHandler(StreamOptions{
+	Store:            streamers.NewStore(path),
+	SubmissionsStore: submissions.NewStore(filepath.Join(dir, "submissions.json")),
+	YouTubeClient:    hub.Client(),
+	YouTubeHubURL:    hub.URL,
+})
 	payload := map[string]any{
 		"streamer": map[string]string{
 			"id": record.Streamer.ID,
@@ -256,12 +258,12 @@ func TestStreamersHandlerDeleteUnsubscribeFailure(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	handler := StreamersHandler(StreamOptions{
-		FilePath:        path,
-		SubmissionsPath: filepath.Join(dir, "submissions.json"),
-		YouTubeClient:   hub.Client(),
-		YouTubeHubURL:   hub.URL,
-	})
+handler := StreamersHandler(StreamOptions{
+	Store:            streamers.NewStore(path),
+	SubmissionsStore: submissions.NewStore(filepath.Join(dir, "submissions.json")),
+	YouTubeClient:    hub.Client(),
+	YouTubeHubURL:    hub.URL,
+})
 	body, _ := json.Marshal(map[string]any{
 		"streamer": map[string]any{
 			"id": record.Streamer.ID,
@@ -289,7 +291,7 @@ func TestStreamersHandlerDeleteUnsubscribeFailure(t *testing.T) {
 func TestStreamersHandlerDeleteValidations(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "streamers.json")
-	handler := StreamersHandler(StreamOptions{FilePath: path, SubmissionsPath: filepath.Join(dir, "submissions.json")})
+handler := StreamersHandler(StreamOptions{Store: streamers.NewStore(path), SubmissionsStore: submissions.NewStore(filepath.Join(dir, "submissions.json"))})
 
 	t.Run("missing id", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodDelete, "/api/streamers", bytes.NewBufferString(`{"streamer":{"id":""}}`))
@@ -330,7 +332,7 @@ func TestStreamersHandlerPatch(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	handler := StreamersHandler(StreamOptions{FilePath: path, SubmissionsPath: filepath.Join(dir, "submissions.json")})
+handler := StreamersHandler(StreamOptions{Store: streamers.NewStore(path), SubmissionsStore: submissions.NewStore(filepath.Join(dir, "submissions.json"))})
 
 	t.Run("success", func(t *testing.T) {
 		payload := map[string]any{
@@ -375,7 +377,10 @@ func TestStreamersHandlerPatch(t *testing.T) {
 
 func TestStreamersHandlerMethodNotAllowed(t *testing.T) {
 	dir := t.TempDir()
-	handler := StreamersHandler(StreamOptions{SubmissionsPath: filepath.Join(dir, "submissions.json"), FilePath: filepath.Join(dir, "streamers.json")})
+handler := StreamersHandler(StreamOptions{
+	Store:            streamers.NewStore(filepath.Join(dir, "streamers.json")),
+	SubmissionsStore: submissions.NewStore(filepath.Join(dir, "submissions.json")),
+})
 	req := httptest.NewRequest(http.MethodPut, "/api/streamers", nil)
 	rr := httptest.NewRecorder()
 

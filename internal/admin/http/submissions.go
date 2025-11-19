@@ -17,21 +17,21 @@ import (
 )
 
 type SubmissionsHandlerOptions struct {
-	Manager       *adminauth.Manager
-	FilePath      string
-	StreamersPath string
-	YouTubeClient *http.Client
-	Logger        logging.Logger
-	YouTube       config.YouTubeConfig
+	Manager          *adminauth.Manager
+	SubmissionsStore *submissions.Store
+	StreamersStore   *streamers.Store
+	YouTubeClient    *http.Client
+	Logger           logging.Logger
+	YouTube          config.YouTubeConfig
 }
 
 type submissionsHandler struct {
-	manager       *adminauth.Manager
-	path          string
-	streamersPath string
-	youtubeClient *http.Client
-	youtube       config.YouTubeConfig
-	logger        logging.Logger
+	manager          *adminauth.Manager
+	submissionsStore *submissions.Store
+	streamersStore   *streamers.Store
+	youtubeClient    *http.Client
+	youtube          config.YouTubeConfig
+	logger           logging.Logger
 }
 
 type adminActionRequest struct {
@@ -44,25 +44,25 @@ type submissionsResponse struct {
 }
 
 func NewSubmissionsHandler(opts SubmissionsHandlerOptions) http.Handler {
-	path := opts.FilePath
-	if path == "" {
-		path = submissions.DefaultFilePath
+	submissionsStore := opts.SubmissionsStore
+	if submissionsStore == nil {
+		submissionsStore = submissions.NewStore(submissions.DefaultFilePath)
 	}
-	streamersPath := opts.StreamersPath
-	if streamersPath == "" {
-		streamersPath = streamers.DefaultFilePath
+	streamersStore := opts.StreamersStore
+	if streamersStore == nil {
+		streamersStore = streamers.NewStore(streamers.DefaultFilePath)
 	}
 	client := opts.YouTubeClient
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
 	return submissionsHandler{
-		manager:       opts.Manager,
-		path:          path,
-		streamersPath: streamersPath,
-		youtubeClient: client,
-		youtube:       opts.YouTube,
-		logger:        opts.Logger,
+		manager:          opts.Manager,
+		submissionsStore: submissionsStore,
+		streamersStore:   streamersStore,
+		youtubeClient:    client,
+		youtube:          opts.YouTube,
+		logger:           opts.Logger,
 	}
 }
 
@@ -99,7 +99,7 @@ func (h submissionsHandler) authorize(r *http.Request) bool {
 }
 
 func (h submissionsHandler) list(w http.ResponseWriter) {
-	pending, err := submissions.List(h.path)
+	pending, err := h.submissionsStore.List()
 	if err != nil {
 		if h.logger != nil {
 			h.logger.Printf("list submissions: %v", err)
@@ -128,7 +128,7 @@ func (h submissionsHandler) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	removed, err := submissions.Remove(h.path, id)
+	removed, err := h.submissionsStore.Remove(id)
 	if err != nil {
 		if err == submissions.ErrNotFound {
 			http.Error(w, "submission not found", http.StatusNotFound)
@@ -150,13 +150,13 @@ func (h submissionsHandler) update(w http.ResponseWriter, r *http.Request) {
 				Languages:   removed.Languages,
 			},
 		}
-		persisted, err := streamers.Append(h.streamersPath, record)
+		persisted, err := h.streamersStore.Append(record)
 		if err != nil {
 			if h.logger != nil {
 				h.logger.Printf("append streamer from submission: %v", err)
 			}
 			// requeue submission so it isn't lost
-			_ = requeueSubmission(h.path, removed, h.logger)
+			_ = requeueSubmission(h.submissionsStore, removed, h.logger)
 			if errors.Is(err, streamers.ErrDuplicateAlias) {
 				http.Error(w, "a streamer with that alias already exists", http.StatusConflict)
 				return
@@ -174,7 +174,7 @@ func (h submissionsHandler) update(w http.ResponseWriter, r *http.Request) {
 				VerifyMode:    strings.TrimSpace(h.youtube.Verify),
 				LeaseSeconds:  h.youtube.LeaseSeconds,
 				Logger:        h.logger,
-				StreamersPath: h.streamersPath,
+				Store:         h.streamersStore,
 			}
 			if err := onboarding.FromURL(ctx, persisted, url, onboardOpts); err != nil && h.logger != nil {
 				h.logger.Printf("failed to process platform url for %s: %v", persisted.Streamer.Alias, err)
@@ -198,8 +198,8 @@ func respondJSON(w http.ResponseWriter, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-func requeueSubmission(path string, submission submissions.Submission, logger logging.Logger) error {
-	_, err := submissions.Append(path, submission)
+func requeueSubmission(store *submissions.Store, submission submissions.Submission, logger logging.Logger) error {
+	_, err := store.Append(submission)
 	if err != nil && logger != nil {
 		logger.Printf("failed to requeue submission %s: %v", submission.ID, err)
 	}
