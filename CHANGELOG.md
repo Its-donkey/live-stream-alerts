@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 ### Added
+- Added the `internal/app` bootstrap package (with dedicated logging helpers and unit tests) so `cmd/alertserver/main.go` only wires its context and delegates to a single entrypoint.
+- Added regression tests for the config loader to verify default resolution/override precedence now that `config.Load` returns structured errors instead of terminating the process.
 - Added a typed config loader plus JSON schema that accepts a nested `server` block (with `addr`/`port`) and `youtube` overrides inside `config.json`, falling back to the historic flat keys so operators can retarget the HTTP listener without recompiling.
 - Parse incoming YouTube WebSub notifications, fetch the related watch pages (no API key required), and persist streamer `status` details whenever a live broadcast starts so downstream tooling can react instantly.
 - Introduced the v1 HTTP router with request-dump logging so every inbound request is captured alongside the YouTube alert verification endpoint.
@@ -26,8 +28,11 @@
 - Once a WebSub notification confirms a YouTube livestream is online, persist the streamer’s `status` with the active video ID, start timestamp, and platform list so downstream tooling can display who’s live.
 - Inspect POST `/alerts` WebSub notifications, parse the feed payload, and query YouTube to confirm whether the referenced video is a livestream that's currently online.
 - Rotated `data/alertserver.log` into timestamped archives under `data/logs/` on startup so each run writes to a clean file without losing history.
+- Added POST `/api/admin/login` plus an `admin` config block so the console can request bearer tokens tied to configured credentials, alongside GET/POST `/api/admin/submissions` for listing and approving/rejecting pending streamer submissions.
+- Updated POST `/api/streamers` to queue submissions in `data/submissions.json` until an admin approves them, keeping `data/streamers.json` limited to vetted entries.
 - Added a background YouTube lease monitor that renews subscriptions once ~95% of the current `leaseSeconds` window has elapsed so WebSub callbacks keep flowing without manual intervention.
 ### Changed
+- Reworked configuration/state wiring so YouTube hub/callback/verify/lease settings are injected through `internal/api/v1`, onboarding, admin submissions, and subscription clients instead of relying on the old `config.YT` globals.
 - Removed the embedded alGUI assets/handler so the alert server stays API-only, returning a placeholder at `/` and keeping the UI’s traffic out of alert-server logs.
 - Allowed `streamer.firstName`, `streamer.lastName`, and `streamer.email` fields to be blank in the JSON schema so optional contact details no longer trigger validation errors.
 - Moved the HTTP router under `internal/api/v1` and updated docs/CLI tooling so future endpoints live under their API versioned package.
