@@ -1,4 +1,4 @@
-// file name — /config/config.go
+// Package config loads and normalises alert-server configuration files.
 package config
 
 import (

@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// Expectation captures the details of a pending hub verification callback.
 type Expectation struct {
 	Mode         string
 	Topic        string
@@ -26,6 +27,7 @@ var (
 	mu           sync.Mutex
 )
 
+// GenerateVerifyToken returns a random token used to correlate hub callbacks.
 func GenerateVerifyToken() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -35,6 +37,7 @@ func GenerateVerifyToken() string {
 	return hex.EncodeToString(b)
 }
 
+// RegisterExpectation stores the supplied expectation so callbacks can look it up.
 func RegisterExpectation(exp Expectation) {
 	if exp.VerifyToken == "" {
 		return
@@ -44,6 +47,7 @@ func RegisterExpectation(exp Expectation) {
 	mu.Unlock()
 }
 
+// LookupExpectation returns the expectation for the provided token without removing it.
 func LookupExpectation(token string) (Expectation, bool) {
 	mu.Lock()
 	exp, ok := expectations[token]
@@ -51,6 +55,7 @@ func LookupExpectation(token string) (Expectation, bool) {
 	return exp, ok
 }
 
+// ConsumeExpectation returns and deletes the expectation associated with the token.
 func ConsumeExpectation(token string) (Expectation, bool) {
 	mu.Lock()
 	exp, ok := expectations[token]
@@ -61,6 +66,7 @@ func ConsumeExpectation(token string) (Expectation, bool) {
 	return exp, ok
 }
 
+// CancelExpectation discards the expectation for the provided token.
 func CancelExpectation(token string) {
 	mu.Lock()
 	delete(expectations, token)

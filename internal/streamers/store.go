@@ -110,11 +110,15 @@ type TwitchPlatform struct {
 }
 
 var (
+	// ErrDuplicateStreamerID indicates an ID conflict during persistence.
 	ErrDuplicateStreamerID = errors.New("streamer id already exists")
-	ErrStreamerNotFound    = errors.New("streamer not found")
-	ErrDuplicateAlias      = errors.New("streamer alias already exists")
+	// ErrStreamerNotFound signals that no streamer matched the provided identifier.
+	ErrStreamerNotFound = errors.New("streamer not found")
+	// ErrDuplicateAlias indicates the alias collides with an existing record.
+	ErrDuplicateAlias = errors.New("streamer alias already exists")
 )
 
+// Store persists streamer records to a JSON file with per-path locking.
 type Store struct {
 	path string
 	mu   sync.Mutex

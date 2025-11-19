@@ -20,6 +20,7 @@ var (
 	ErrNotFound = errors.New("submission not found")
 )
 
+// Store persists submissions to disk behind a per-path mutex.
 type Store struct {
 	path string
 	mu   sync.Mutex

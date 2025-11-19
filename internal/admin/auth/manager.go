@@ -9,17 +9,20 @@ import (
 	"time"
 )
 
+// Config captures the credentials and TTL required to issue admin tokens.
 type Config struct {
 	Email    string
 	Password string
 	TokenTTL time.Duration
 }
 
+// Token represents a bearer token issued after a successful login.
 type Token struct {
 	Value     string
 	ExpiresAt time.Time
 }
 
+// Manager issues and validates admin bearer tokens.
 type Manager struct {
 	email    string
 	password string
@@ -29,8 +32,10 @@ type Manager struct {
 	tokens map[string]time.Time
 }
 
+// ErrInvalidCredentials indicates that the provided email/password pair was rejected.
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
+// NewManager returns a Manager initialised with the supplied config.
 func NewManager(cfg Config) *Manager {
 	ttl := cfg.TokenTTL
 	if ttl <= 0 {
@@ -44,6 +49,7 @@ func NewManager(cfg Config) *Manager {
 	}
 }
 
+// Login validates the provided credentials and returns a short-lived token.
 func (m *Manager) Login(email, password string) (Token, error) {
 	if m == nil {
 		return Token{}, ErrInvalidCredentials
@@ -68,6 +74,7 @@ func (m *Manager) Login(email, password string) (Token, error) {
 	return token, nil
 }
 
+// Validate checks whether the provided token exists and has not expired.
 func (m *Manager) Validate(token string) bool {
 	if m == nil {
 		return false
