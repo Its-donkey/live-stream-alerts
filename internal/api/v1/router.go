@@ -115,7 +115,9 @@ func NewRouter(opts Options) http.Handler {
 	mux.Handle("/alert", alertsHandler)
 
 	if opts.AdminAuth != nil {
-		mux.Handle("/api/admin/login", adminhttp.NewLoginHandler(opts.AdminAuth))
+		mux.Handle("/api/admin/login", adminhttp.NewLoginHandler(adminhttp.LoginHandlerOptions{
+			Manager: opts.AdminAuth,
+		}))
 		mux.Handle("/api/admin/submissions", adminhttp.NewSubmissionsHandler(adminhttp.SubmissionsHandlerOptions{
 			Manager:          opts.AdminAuth,
 			Logger:           logger,
@@ -166,14 +168,14 @@ func handleAlerts(notificationOpts youtubehandlers.AlertNotificationOptions) htt
 		platform := alertPlatform(userAgent, from)
 
 		switch r.Method {
-		case http.MethodGet:
-			if platform == "youtube" {
-				if youtubehandlers.HandleSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
-					Logger:         logger,
-					StreamersStore: notificationOpts.StreamersStore,
-				}) {
-					return
-				}
+			case http.MethodGet:
+				if platform == "youtube" {
+					if youtubehandlers.HandleSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
+						Logger:         logger,
+						StreamersStore: notificationOpts.StreamersStore,
+					}) {
+						return
+					}
 				http.Error(w, "invalid subscription confirmation", http.StatusBadRequest)
 				return
 			}
