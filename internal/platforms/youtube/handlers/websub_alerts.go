@@ -1,4 +1,4 @@
-// file name: internal/platforms/youtube/handlers/websub_alerts.go
+// Package handlers exposes HTTP handlers for YouTube WebSub workflows.
 package handlers
 
 import (

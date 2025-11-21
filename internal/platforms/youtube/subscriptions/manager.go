@@ -1,4 +1,3 @@
-// file name — /subscriber.go
 package subscriptions
 
 import (

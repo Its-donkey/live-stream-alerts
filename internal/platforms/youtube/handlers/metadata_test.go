@@ -4,21 +4,37 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	youtubeservice "live-stream-alerts/internal/platforms/youtube/service"
 )
 
-func TestNewMetadataHandlerSuccess(t *testing.T) {
-	html := `<!doctype html><html><head><meta name="description" content="Desc"><meta property="og:title" content="Title"><meta property="og:url" content="https://www.youtube.com/@example"><meta itemprop="channelId" content="UC999"></head></html>`
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(html))
-	}))
-	t.Cleanup(server.Close)
+type stubMetadataFetcher struct {
+	data youtubeservice.Metadata
+	err  error
+	url  string
+}
 
-	handler := NewMetadataHandler(MetadataHandlerOptions{Client: server.Client()})
+func (s *stubMetadataFetcher) Fetch(ctx context.Context, rawURL string) (youtubeservice.Metadata, error) {
+	s.url = rawURL
+	return s.data, s.err
+}
 
-	body, _ := json.Marshal(MetadataRequest{URL: server.URL})
+func TestMetadataHandlerSuccess(t *testing.T) {
+	fetcher := &stubMetadataFetcher{
+		data: youtubeservice.Metadata{
+			Description: "Desc",
+			Title:       "Title",
+			Handle:      "@example",
+			ChannelID:   "UC999",
+		},
+	}
+	handler := NewMetadataHandler(MetadataHandlerOptions{Fetcher: fetcher})
+
+	body, _ := json.Marshal(MetadataRequest{URL: "https://example.com"})
 	req := httptest.NewRequest(http.MethodPost, "/api/youtube/metadata", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
@@ -34,10 +50,13 @@ func TestNewMetadataHandlerSuccess(t *testing.T) {
 	if resp.Description != "Desc" || resp.Title != "Title" || resp.Handle != "@example" || resp.ChannelID != "UC999" {
 		t.Fatalf("unexpected response: %#v", resp)
 	}
+	if fetcher.url != "https://example.com" {
+		t.Fatalf("expected fetcher to receive url")
+	}
 }
 
-func TestNewMetadataHandlerValidatesInput(t *testing.T) {
-	handler := NewMetadataHandler(MetadataHandlerOptions{})
+func TestMetadataHandlerErrors(t *testing.T) {
+	handler := NewMetadataHandler(MetadataHandlerOptions{Fetcher: &stubMetadataFetcher{}})
 
 	t.Run("method", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -57,65 +76,27 @@ func TestNewMetadataHandlerValidatesInput(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid URL", func(t *testing.T) {
-		payload, _ := json.Marshal(MetadataRequest{URL: "ftp://example"})
-		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(payload))
+	t.Run("validation error", func(t *testing.T) {
+		fetcher := &stubMetadataFetcher{err: fmt.Errorf("%w: url required", youtubeservice.ErrValidation)}
+		handler := NewMetadataHandler(MetadataHandlerOptions{Fetcher: fetcher})
+		body, _ := json.Marshal(MetadataRequest{URL: ""})
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", rr.Code)
 		}
 	})
-}
 
-func TestFetchMetadataParsesContent(t *testing.T) {
-	html := `<!doctype html><html><head><title>Alt</title><meta property="og:url" content="https://youtube.com/@other"><link rel="canonical" href="https://youtube.com/channel/UC111"><meta itemprop="channelId" content="UC111"></head></html>`
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(html))
-	}))
-	defer server.Close()
-
-	desc, title, handle, channelID, err := fetchMetadata(context.Background(), server.Client(), server.URL)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if title != "Alt" {
-		t.Fatalf("expected title, got %q", title)
-	}
-	if handle != "@other" {
-		t.Fatalf("expected handle, got %q", handle)
-	}
-	if channelID != "UC111" {
-		t.Fatalf("expected channel ID, got %q", channelID)
-	}
-	if desc != "Alt" {
-		t.Fatalf("expected desc fallback to title")
-	}
-}
-
-func TestFirstNonEmpty(t *testing.T) {
-	if got := firstNonEmpty("", " value ", "another"); got != "value" {
-		t.Fatalf("expected trimmed first non-empty, got %q", got)
-	}
-	if firstNonEmpty() != "" {
-		t.Fatalf("expected empty when no values")
-	}
-}
-
-func TestDeriveHandle(t *testing.T) {
-	if deriveHandle("https://youtube.com/@handle") != "@handle" {
-		t.Fatalf("expected handle to be returned")
-	}
-	if deriveHandle("https://youtube.com/channel/UC123") != "" {
-		t.Fatalf("expected empty handle")
-	}
-}
-
-func TestParseChannelID(t *testing.T) {
-	if parseChannelID("https://youtube.com/channel/UC999") != "UC999" {
-		t.Fatalf("expected channel ID")
-	}
-	if parseChannelID("https://youtube.com/user/test") != "" {
-		t.Fatalf("expected empty when pattern missing")
-	}
+	t.Run("upstream error", func(t *testing.T) {
+		fetcher := &stubMetadataFetcher{err: fmt.Errorf("%w: fetch failed", youtubeservice.ErrUpstream)}
+		handler := NewMetadataHandler(MetadataHandlerOptions{Fetcher: fetcher})
+		body, _ := json.Marshal(MetadataRequest{URL: "https://example.com"})
+		req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusBadGateway {
+			t.Fatalf("expected 502, got %d", rr.Code)
+		}
+	})
 }

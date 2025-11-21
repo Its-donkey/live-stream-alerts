@@ -1,4 +1,4 @@
-// internal/logging/logger.go
+// Package logging centralises the alert-server logging helpers and adapters.
 package logging
 
 import (

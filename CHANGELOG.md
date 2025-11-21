@@ -34,6 +34,16 @@
 ### Changed
 - Encapsulated the streamer and submissions file stores behind `streamers.Store`/`submissions.Store` so handlers, admins, and WebSub flows share path-scoped locks instead of package-level globals.
 - Split the admin login/submission endpoints into dedicated services so handlers just authorize/encode responses while the new service layer covers approval/onboarding workflows with targeted tests.
+- Documented the admin auth manager, HTTP handlers, and router exports so every public type/function ships with GoDoc coverage.
+- Added package/type documentation across config, logging, store, and YouTube platform packages so exported APIs pass linting.
+- Moved the YouTube channel lookup, metadata, and subscription HTTP handlers onto dedicated services so transport code only validates HTTP details while services manage upstream calls and defaults with new unit tests.
+- Added regression tests for the submissions store so append/list/remove behaviors (including ID/SubmittedAt defaults) stay covered.
+- Sanitized the WebSub notification handler logging so Atom parse errors are not logged (clients just get 400) and upstream fetch errors are logged only when informative, preventing noisy logs.
+- Lease monitor now exposes `Stop()` and waits for renewal goroutines before exiting, letting the app tie the background YouTube subscription refresh loop to the server lifecycle cleanly.
+- Submissions store now accepts injected clocks/ID generators so tests can deterministically assert `SubmittedAt` and ID values without relying on real time.
+- Split the WebSub notification handler into a dedicated `service.AlertProcessor`, keeping the HTTP layer focused on method/path/response mapping while business logic (feed parsing, lookups, live-status updates) lives in the service with targeted tests.
+- Added `.github/workflows/ci.yml` so gofmt/vet/test run on every push/PR, and documented the workflow in the README to keep config/transport/core/CI responsibilities clear.
+- Added `docs/ARCHITECTURE.md` (linked from the README) documenting the layered design, key packages, background workers, and testing conventions so future contributors understand the configuration/transport/core separation.
 - Reworked configuration/state wiring so YouTube hub/callback/verify/lease settings are injected through `internal/api/v1`, onboarding, admin submissions, and subscription clients instead of relying on the old `config.YT` globals.
 - Removed the embedded alGUI assets/handler so the alert server stays API-only, returning a placeholder at `/` and keeping the UI’s traffic out of alert-server logs.
 - Allowed `streamer.firstName`, `streamer.lastName`, and `streamer.email` fields to be blank in the JSON schema so optional contact details no longer trigger validation errors.

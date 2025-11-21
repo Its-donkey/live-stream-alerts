@@ -3,14 +3,12 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
+	"errors"
 	"net/http"
-	"net/url"
-	"strings"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
+	"live-stream-alerts/internal/logging"
+	youtubeservice "live-stream-alerts/internal/platforms/youtube/service"
 )
 
 // MetadataRequest describes the payload for fetching metadata.
@@ -26,167 +24,88 @@ type MetadataResponse struct {
 	ChannelID   string `json:"channelId"`
 }
 
+type metadataFetcher interface {
+	Fetch(ctx context.Context, rawURL string) (youtubeservice.Metadata, error)
+}
+
 // MetadataHandlerOptions configures the metadata handler.
 type MetadataHandlerOptions struct {
-	Client *http.Client
+	Fetcher metadataFetcher
+	Client  *http.Client
+	Logger  logging.Logger
+}
+
+type metadataHandler struct {
+	fetcher metadataFetcher
+	logger  logging.Logger
 }
 
 // NewMetadataHandler returns an http.Handler that fetches metadata for a given URL.
 func NewMetadataHandler(opts MetadataHandlerOptions) http.Handler {
-	client := opts.Client
-	if client == nil {
-		client = &http.Client{Timeout: 5 * time.Second}
+	fetcher := opts.Fetcher
+	if fetcher == nil {
+		fetcher = youtubeservice.MetadataService{
+			Client:  opts.Client,
+			Timeout: 5 * time.Second,
+		}
+	}
+	h := metadataHandler{fetcher: fetcher, logger: opts.Logger}
+	return http.HandlerFunc(h.ServeHTTP)
+}
+
+func (h metadataHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !isPostRequest(r) {
+		writeMethodNotAllowed(w, http.MethodPost)
+		return
+	}
+	defer r.Body.Close()
+
+	req, err := decodeMetadataRequest(r)
+	if err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
 	}
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isPostRequest(r) {
-			writeMethodNotAllowed(w, http.MethodPost)
-			return
-		}
-		defer r.Body.Close()
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
 
-		req, validation := decodeMetadataRequest(r)
-		if !validation.IsValid {
-			http.Error(w, validation.Error, http.StatusBadRequest)
-			return
-		}
+	data, fetchErr := h.fetcher.Fetch(ctx, req.URL)
+	if fetchErr != nil {
+		h.respondError(w, fetchErr)
+		return
+	}
 
-		targetURL, targetValidation := normaliseMetadataURL(req.URL)
-		if !targetValidation.IsValid {
-			http.Error(w, targetValidation.Error, http.StatusBadRequest)
-			return
-		}
-
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		defer cancel()
-
-		desc, title, handle, channelID, err := fetchMetadata(ctx, client, targetURL)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
-
-		writeMetadataResponse(w, MetadataResponse{
-			Description: desc,
-			Title:       title,
-			Handle:      handle,
-			ChannelID:   channelID,
-		})
+	writeMetadataResponse(w, MetadataResponse{
+		Description: data.Description,
+		Title:       data.Title,
+		Handle:      data.Handle,
+		ChannelID:   data.ChannelID,
 	})
 }
 
-func decodeMetadataRequest(r *http.Request) (MetadataRequest, ValidationResult) {
-	var req MetadataRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		return req, ValidationResult{IsValid: false, Error: "invalid JSON body"}
+func (h metadataHandler) respondError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, youtubeservice.ErrValidation):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, youtubeservice.ErrUpstream):
+		http.Error(w, "failed to fetch metadata", http.StatusBadGateway)
+	default:
+		if h.logger != nil {
+			h.logger.Printf("metadata fetch failed: %v", err)
+		}
+		http.Error(w, "failed to fetch metadata", http.StatusInternalServerError)
 	}
-	return req, ValidationResult{IsValid: true}
 }
 
-func normaliseMetadataURL(raw string) (string, ValidationResult) {
-	target := strings.TrimSpace(raw)
-	if target == "" {
-		return "", ValidationResult{IsValid: false, Error: "url is required"}
+func decodeMetadataRequest(r *http.Request) (MetadataRequest, error) {
+	var req MetadataRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return req, err
 	}
-
-	parsed, err := url.Parse(target)
-	if err != nil || parsed.Scheme == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return "", ValidationResult{IsValid: false, Error: "url must be http or https"}
-	}
-
-	return parsed.String(), ValidationResult{IsValid: true}
+	return req, nil
 }
 
 func writeMetadataResponse(w http.ResponseWriter, resp MetadataResponse) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(resp)
-}
-
-func fetchMetadata(ctx context.Context, client *http.Client, target string) (string, string, string, string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
-	if err != nil {
-		return "", "", "", "", err
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", "", "", "", err
-	}
-	defer resp.Body.Close()
-
-	limited := io.LimitReader(resp.Body, 2<<20) // 2 MB
-	doc, err := goquery.NewDocumentFromReader(limited)
-	if err != nil {
-		return "", "", "", "", fmt.Errorf("failed to parse page")
-	}
-
-	title := firstNonEmpty(
-		doc.Find(`meta[property="og:title"]`).AttrOr("content", ""),
-		doc.Find(`meta[name="twitter:title"]`).AttrOr("content", ""),
-		doc.Find("title").Text(),
-	)
-	desc := firstNonEmpty(
-		doc.Find(`meta[name="description"]`).AttrOr("content", ""),
-		doc.Find(`meta[property="og:description"]`).AttrOr("content", ""),
-	)
-	if desc == "" {
-		desc = title
-	}
-	if desc == "" && title == "" {
-		return "", "", "", "", fmt.Errorf("description not found")
-	}
-
-	pageURL := firstNonEmpty(
-		doc.Find(`meta[property="og:url"]`).AttrOr("content", ""),
-		doc.Find(`link[rel="canonical"]`).AttrOr("href", ""),
-		target,
-	)
-	handle := deriveHandle(pageURL)
-	channelID := firstNonEmpty(
-		doc.Find(`meta[itemprop="channelId"]`).AttrOr("content", ""),
-		parseChannelID(pageURL),
-	)
-	if handle == "" {
-		handle = deriveHandle(target)
-	}
-	if channelID == "" {
-		channelID = parseChannelID(target)
-	}
-	return desc, title, handle, channelID, nil
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if trimmed := strings.TrimSpace(v); trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
-}
-
-func deriveHandle(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return ""
-	}
-	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(parts) == 0 {
-		return ""
-	}
-	if strings.HasPrefix(parts[0], "@") {
-		return parts[0]
-	}
-	return ""
-}
-
-func parseChannelID(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return ""
-	}
-	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(parts) >= 2 && parts[0] == "channel" {
-		return parts[1]
-	}
-	return ""
 }

@@ -1,4 +1,3 @@
-// file name: internal/platforms/youtube/store/lease.go
 package subscriptions
 
 import (

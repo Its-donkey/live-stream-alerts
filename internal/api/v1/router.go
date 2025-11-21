@@ -13,6 +13,7 @@ import (
 	"live-stream-alerts/internal/logging"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
 	"live-stream-alerts/internal/platforms/youtube/liveinfo"
+	youtubeservice "live-stream-alerts/internal/platforms/youtube/service"
 	"live-stream-alerts/internal/streamers"
 	streamershandlers "live-stream-alerts/internal/streamers/handlers"
 	streamersvc "live-stream-alerts/internal/streamers/service"
@@ -81,17 +82,29 @@ func NewRouter(opts Options) http.Handler {
 		Service: streamerService,
 	})
 
-	mux.Handle("/api/youtube/channel", youtubehandlers.NewChannelLookupHandler(nil))
-	mux.Handle("/api/youtube/metadata", youtubehandlers.NewMetadataHandler(youtubehandlers.MetadataHandlerOptions{}))
-	commonSubOpts := youtubehandlers.SubscriptionHandlerOptions{
+	channelResolver := youtubeservice.ChannelResolver{}
+	mux.Handle("/api/youtube/channel", youtubehandlers.NewChannelLookupHandler(youtubehandlers.ChannelLookupHandlerOptions{
+		Resolver: channelResolver,
+		Logger:   logger,
+	}))
+	mux.Handle("/api/youtube/metadata", youtubehandlers.NewMetadataHandler(youtubehandlers.MetadataHandlerOptions{
+		Logger: logger,
+	}))
+	commonProxyOpts := youtubeservice.SubscriptionProxyOptions{
 		Logger:       logger,
 		HubURL:       strings.TrimSpace(opts.YouTube.HubURL),
 		CallbackURL:  strings.TrimSpace(opts.YouTube.CallbackURL),
 		VerifyMode:   strings.TrimSpace(opts.YouTube.Verify),
 		LeaseSeconds: opts.YouTube.LeaseSeconds,
 	}
-	mux.Handle("/api/youtube/subscribe", youtubehandlers.NewSubscribeHandler(commonSubOpts))
-	mux.Handle("/api/youtube/unsubscribe", youtubehandlers.NewUnsubscribeHandler(commonSubOpts))
+	mux.Handle("/api/youtube/subscribe", youtubehandlers.NewSubscribeHandler(youtubehandlers.SubscriptionHandlerOptions{
+		Proxy:  youtubeservice.NewSubscriptionProxy("subscribe", commonProxyOpts),
+		Logger: logger,
+	}))
+	mux.Handle("/api/youtube/unsubscribe", youtubehandlers.NewUnsubscribeHandler(youtubehandlers.SubscriptionHandlerOptions{
+		Proxy:  youtubeservice.NewSubscriptionProxy("unsubscribe", commonProxyOpts),
+		Logger: logger,
+	}))
 	mux.Handle("/api/streamers", streamersHandler)
 	mux.Handle("/api/streamers/watch", streamersWatchHandler(streamersWatchOptions{
 		FilePath:     streamersPath,
@@ -168,14 +181,14 @@ func handleAlerts(notificationOpts youtubehandlers.AlertNotificationOptions) htt
 		platform := alertPlatform(userAgent, from)
 
 		switch r.Method {
-			case http.MethodGet:
-				if platform == "youtube" {
-					if youtubehandlers.HandleSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
-						Logger:         logger,
-						StreamersStore: notificationOpts.StreamersStore,
-					}) {
-						return
-					}
+		case http.MethodGet:
+			if platform == "youtube" {
+				if youtubehandlers.HandleSubscriptionConfirmation(w, r, youtubehandlers.SubscriptionConfirmationOptions{
+					Logger:         logger,
+					StreamersStore: notificationOpts.StreamersStore,
+				}) {
+					return
+				}
 				http.Error(w, "invalid subscription confirmation", http.StatusBadRequest)
 				return
 			}

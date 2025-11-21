@@ -30,12 +30,21 @@ type LeaseMonitor struct {
 	logger       logging.Logger
 	lastAttempts map[string]time.Time
 	mu           sync.Mutex
+	cancel       context.CancelFunc
+	runWg        sync.WaitGroup
+	renewWg      sync.WaitGroup
 }
 
 // StartLeaseMonitor launches the lease monitor using the provided context.
 func StartLeaseMonitor(ctx context.Context, cfg LeaseMonitorConfig) *LeaseMonitor {
 	monitor := newLeaseMonitor(cfg)
-	go monitor.run(ctx)
+	runCtx, cancel := context.WithCancel(ctx)
+	monitor.cancel = cancel
+	monitor.runWg.Add(1)
+	go func() {
+		defer monitor.runWg.Done()
+		monitor.run(runCtx)
+	}()
 	return monitor
 }
 
@@ -138,7 +147,7 @@ func (m *LeaseMonitor) inspectRecord(ctx context.Context, record streamers.Recor
 		return
 	}
 	m.recordAttempt(channelID, now)
-	go m.triggerRenewal(ctx, record)
+	m.launchRenewal(ctx, record)
 }
 
 func (m *LeaseMonitor) shouldRenew(leaseStart time.Time, leaseSeconds int, now time.Time) bool {
@@ -185,6 +194,14 @@ func (m *LeaseMonitor) recordAttempt(channelID string, at time.Time) {
 	m.mu.Unlock()
 }
 
+func (m *LeaseMonitor) launchRenewal(ctx context.Context, record streamers.Record) {
+	m.renewWg.Add(1)
+	go func() {
+		defer m.renewWg.Done()
+		m.triggerRenewal(ctx, record)
+	}()
+}
+
 func (m *LeaseMonitor) triggerRenewal(ctx context.Context, record streamers.Record) {
 	if m.logger != nil {
 		m.logger.Printf("lease monitor: renewing subscription for %s (channel=%s)", record.Streamer.Alias, record.Platforms.YouTube.ChannelID)
@@ -195,4 +212,16 @@ func (m *LeaseMonitor) triggerRenewal(ctx context.Context, record streamers.Reco
 	if err := m.cfg.Renew(renewCtx, record, m.options); err != nil && m.logger != nil {
 		m.logger.Printf("lease monitor: renewal failed for %s: %v", record.Streamer.Alias, err)
 	}
+}
+
+// Stop cancels the monitor and waits for all goroutines to finish.
+func (m *LeaseMonitor) Stop() {
+	if m == nil {
+		return
+	}
+	if m.cancel != nil {
+		m.cancel()
+	}
+	m.runWg.Wait()
+	m.renewWg.Wait()
 }
