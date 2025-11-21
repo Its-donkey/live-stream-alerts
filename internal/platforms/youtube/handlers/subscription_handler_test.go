@@ -15,8 +15,8 @@ import (
 
 type stubSubscriptionProxy struct {
 	result youtubeservice.SubscriptionResult
-	err    error
-	req    subscriptions.YouTubeRequest
+	err error
+	req subscriptions.YouTubeRequest
 }
 
 func (s *stubSubscriptionProxy) Process(ctx context.Context, req subscriptions.YouTubeRequest) (youtubeservice.SubscriptionResult, error) {
