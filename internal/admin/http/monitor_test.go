@@ -9,13 +9,13 @@ import (
 	"testing"
 
 	adminhttp "live-stream-alerts/internal/admin/http"
-	adminservice "live-stream-alerts/internal/admin/service"
+	"live-stream-alerts/internal/platforms/youtube/monitoring"
 )
 
 func TestMonitorHandlerSuccess(t *testing.T) {
 	svc := &stubMonitorService{
-		overview: adminservice.YouTubeMonitorOverview{
-			Summary: adminservice.YouTubeMonitorSummary{Total: 1},
+		overview: monitoring.Overview{
+			Summary: monitoring.Summary{Total: 1},
 		},
 	}
 	handler := adminhttp.NewMonitorHandler(adminhttp.MonitorHandlerOptions{
@@ -29,7 +29,7 @@ func TestMonitorHandlerSuccess(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
-	var resp adminservice.YouTubeMonitorOverview
+	var resp monitoring.Overview
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -86,12 +86,12 @@ func TestMonitorHandlerServiceError(t *testing.T) {
 }
 
 type stubMonitorService struct {
-	overview adminservice.YouTubeMonitorOverview
+	overview monitoring.Overview
 	err      error
 	called   bool
 }
 
-func (s *stubMonitorService) Overview(context.Context) (adminservice.YouTubeMonitorOverview, error) {
+func (s *stubMonitorService) Overview(context.Context) (monitoring.Overview, error) {
 	s.called = true
 	return s.overview, s.err
 }

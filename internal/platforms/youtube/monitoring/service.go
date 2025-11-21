@@ -1,4 +1,4 @@
-package service
+package monitoring
 
 import (
 	"context"
@@ -10,10 +10,10 @@ import (
 	"live-stream-alerts/internal/streamers"
 )
 
-const defaultMonitorRenewWindow = 0.05
+const defaultRenewWindow = 0.05
 
-// MonitorServiceOptions configures the YouTube lease monitor service.
-type MonitorServiceOptions struct {
+// ServiceOptions configures the YouTube lease overview service.
+type ServiceOptions struct {
 	StreamersStore      *streamers.Store
 	DefaultLeaseSeconds int
 	RenewWindow         float64
@@ -34,14 +34,14 @@ const (
 	LeaseStatusPending LeaseStatus = "pending"
 )
 
-// YouTubeMonitorOverview summarises the lease status for every stored YouTube channel.
-type YouTubeMonitorOverview struct {
-	Summary YouTubeMonitorSummary `json:"summary"`
-	Records []YouTubeLeaseRecord  `json:"records"`
+// Overview summarises the lease status for every stored YouTube channel.
+type Overview struct {
+	Summary Summary      `json:"summary"`
+	Records []LeaseEntry `json:"records"`
 }
 
-// YouTubeMonitorSummary aggregates counts for the various lease states.
-type YouTubeMonitorSummary struct {
+// Summary aggregates counts for the various lease states.
+type Summary struct {
 	Total    int `json:"total"`
 	Healthy  int `json:"healthy"`
 	Renewing int `json:"renewing"`
@@ -49,8 +49,8 @@ type YouTubeMonitorSummary struct {
 	Pending  int `json:"pending"`
 }
 
-// YouTubeLeaseRecord captures hub lease metadata for a streamer.
-type YouTubeLeaseRecord struct {
+// LeaseEntry captures hub lease metadata for a streamer.
+type LeaseEntry struct {
 	StreamerID         string      `json:"streamerId"`
 	Alias              string      `json:"alias"`
 	ChannelID          string      `json:"channelId"`
@@ -66,16 +66,16 @@ type YouTubeLeaseRecord struct {
 	Issues             []string    `json:"issues,omitempty"`
 }
 
-// MonitorService exposes high-level lease monitor state for admin endpoints.
-type MonitorService struct {
+// Service exposes lease overview data for admin endpoints.
+type Service struct {
 	store               *streamers.Store
 	defaultLeaseSeconds int
 	renewWindow         float64
 	now                 func() time.Time
 }
 
-// NewMonitorService constructs a MonitorService from the provided options.
-func NewMonitorService(opts MonitorServiceOptions) *MonitorService {
+// NewService constructs a Service from the provided options.
+func NewService(opts ServiceOptions) *Service {
 	store := opts.StreamersStore
 	if store == nil {
 		store = streamers.NewStore(streamers.DefaultFilePath)
@@ -86,9 +86,9 @@ func NewMonitorService(opts MonitorServiceOptions) *MonitorService {
 	}
 	renewWindow := opts.RenewWindow
 	if renewWindow <= 0 || renewWindow >= 1 {
-		renewWindow = defaultMonitorRenewWindow
+		renewWindow = defaultRenewWindow
 	}
-	return &MonitorService{
+	return &Service{
 		store:               store,
 		defaultLeaseSeconds: opts.DefaultLeaseSeconds,
 		renewWindow:         renewWindow,
@@ -97,10 +97,10 @@ func NewMonitorService(opts MonitorServiceOptions) *MonitorService {
 }
 
 // Overview returns the lease status for every streamer with YouTube metadata.
-func (s *MonitorService) Overview(ctx context.Context) (YouTubeMonitorOverview, error) {
-	var zero YouTubeMonitorOverview
+func (s *Service) Overview(ctx context.Context) (Overview, error) {
+	var zero Overview
 	if s == nil {
-		return zero, errors.New("monitor service is nil")
+		return zero, errors.New("monitoring service is nil")
 	}
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
@@ -116,34 +116,34 @@ func (s *MonitorService) Overview(ctx context.Context) (YouTubeMonitorOverview, 
 	}
 
 	now := s.now().UTC()
-	var overview YouTubeMonitorOverview
+	var result Overview
 	for _, record := range records {
 		entry := s.inspectRecord(record, now)
 		if entry == nil {
 			continue
 		}
-		overview.Records = append(overview.Records, *entry)
-		overview.Summary.Total++
+		result.Records = append(result.Records, *entry)
+		result.Summary.Total++
 		switch entry.Status {
 		case LeaseStatusHealthy:
-			overview.Summary.Healthy++
+			result.Summary.Healthy++
 		case LeaseStatusRenewing:
-			overview.Summary.Renewing++
+			result.Summary.Renewing++
 		case LeaseStatusExpired:
-			overview.Summary.Expired++
+			result.Summary.Expired++
 		case LeaseStatusPending:
-			overview.Summary.Pending++
+			result.Summary.Pending++
 		}
 	}
-	return overview, nil
+	return result, nil
 }
 
-func (s *MonitorService) inspectRecord(record streamers.Record, now time.Time) *YouTubeLeaseRecord {
+func (s *Service) inspectRecord(record streamers.Record, now time.Time) *LeaseEntry {
 	yt := record.Platforms.YouTube
 	if yt == nil {
 		return nil
 	}
-	entry := YouTubeLeaseRecord{
+	entry := LeaseEntry{
 		StreamerID:  record.Streamer.ID,
 		Alias:       strings.TrimSpace(record.Streamer.Alias),
 		ChannelID:   strings.TrimSpace(yt.ChannelID),
@@ -202,7 +202,7 @@ func (s *MonitorService) inspectRecord(record streamers.Record, now time.Time) *
 	return &entry
 }
 
-func (s *MonitorService) renewWindowDuration(leaseDuration time.Duration) time.Duration {
+func (s *Service) renewWindowDuration(leaseDuration time.Duration) time.Duration {
 	margin := time.Duration(float64(leaseDuration) * s.renewWindow)
 	if margin <= 0 || margin >= leaseDuration {
 		margin = leaseDuration / 20
