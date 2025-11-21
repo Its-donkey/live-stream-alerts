@@ -1,46 +1,24 @@
 package v1
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"live-stream-alerts/config"
-	adminauth "live-stream-alerts/internal/admin/auth"
-	adminhttp "live-stream-alerts/internal/admin/http"
 	"live-stream-alerts/internal/logging"
 	youtubehandlers "live-stream-alerts/internal/platforms/youtube/handlers"
 	"live-stream-alerts/internal/platforms/youtube/liveinfo"
-	youtubeservice "live-stream-alerts/internal/platforms/youtube/service"
 	"live-stream-alerts/internal/streamers"
-	streamershandlers "live-stream-alerts/internal/streamers/handlers"
-	streamersvc "live-stream-alerts/internal/streamers/service"
-	"live-stream-alerts/internal/submissions"
 )
 
-const rootPlaceholder = "UI assets not configured. Run the standalone alGUI project separately.\n"
-
-// RuntimeInfo describes the pieces of server configuration that the UI exposes.
-type RuntimeInfo struct {
-	Name        string `json:"name"`
-	Addr        string `json:"addr"`
-	Port        string `json:"port"`
-	ReadTimeout string `json:"readTimeout"`
-	DataPath    string `json:"dataPath"`
-}
+const rootPlaceholder = "Sharpen Live alerts service (API disabled).\n"
 
 // Options configures the HTTP router.
 type Options struct {
 	Logger             logging.Logger
-	RuntimeInfo        RuntimeInfo
 	StreamersPath      string
-	SubmissionsPath    string
 	StreamersStore     *streamers.Store
-	SubmissionsStore   *submissions.Store
-	StreamersService   streamershandlers.StreamerService
-	AdminAuth          *adminauth.Manager
 	YouTube            config.YouTubeConfig
 	AlertNotifications youtubehandlers.AlertNotificationOptions
 }
@@ -53,64 +31,10 @@ func NewRouter(opts Options) http.Handler {
 	if streamersPath == "" {
 		streamersPath = streamers.DefaultFilePath
 	}
-	submissionsPath := opts.SubmissionsPath
-	if submissionsPath == "" {
-		submissionsPath = submissions.DefaultFilePath
-	}
 	streamersStore := opts.StreamersStore
 	if streamersStore == nil {
 		streamersStore = streamers.NewStore(streamersPath)
 	}
-	streamersPath = streamersStore.Path()
-	submissionsStore := opts.SubmissionsStore
-	if submissionsStore == nil {
-		submissionsStore = submissions.NewStore(submissionsPath)
-	}
-	submissionsPath = submissionsStore.Path()
-
-	streamerService := opts.StreamersService
-	if streamerService == nil {
-		streamerService = streamersvc.New(streamersvc.Options{
-			Streamers:     streamersStore,
-			Submissions:   submissionsStore,
-			YouTubeClient: &http.Client{Timeout: 10 * time.Second},
-			YouTubeHubURL: strings.TrimSpace(opts.YouTube.HubURL),
-		})
-	}
-	streamersHandler := streamershandlers.StreamersHandler(streamershandlers.StreamOptions{
-		Logger:  logger,
-		Service: streamerService,
-	})
-
-	channelResolver := youtubeservice.ChannelResolver{}
-	mux.Handle("/api/youtube/channel", youtubehandlers.NewChannelLookupHandler(youtubehandlers.ChannelLookupHandlerOptions{
-		Resolver: channelResolver,
-		Logger:   logger,
-	}))
-	mux.Handle("/api/youtube/metadata", youtubehandlers.NewMetadataHandler(youtubehandlers.MetadataHandlerOptions{
-		Logger: logger,
-	}))
-	commonProxyOpts := youtubeservice.SubscriptionProxyOptions{
-		Logger:       logger,
-		HubURL:       strings.TrimSpace(opts.YouTube.HubURL),
-		CallbackURL:  strings.TrimSpace(opts.YouTube.CallbackURL),
-		VerifyMode:   strings.TrimSpace(opts.YouTube.Verify),
-		LeaseSeconds: opts.YouTube.LeaseSeconds,
-	}
-	mux.Handle("/api/youtube/subscribe", youtubehandlers.NewSubscribeHandler(youtubehandlers.SubscriptionHandlerOptions{
-		Proxy:  youtubeservice.NewSubscriptionProxy("subscribe", commonProxyOpts),
-		Logger: logger,
-	}))
-	mux.Handle("/api/youtube/unsubscribe", youtubehandlers.NewUnsubscribeHandler(youtubehandlers.SubscriptionHandlerOptions{
-		Proxy:  youtubeservice.NewSubscriptionProxy("unsubscribe", commonProxyOpts),
-		Logger: logger,
-	}))
-	mux.Handle("/api/streamers", streamersHandler)
-	mux.Handle("/api/streamers/watch", streamersWatchHandler(streamersWatchOptions{
-		FilePath:     streamersPath,
-		Logger:       logger,
-		PollInterval: time.Second,
-	}))
 
 	alertsOpts := opts.AlertNotifications
 	if alertsOpts.Logger == nil {
@@ -127,29 +51,6 @@ func NewRouter(opts Options) http.Handler {
 	mux.Handle("/alerts", alertsHandler)
 	mux.Handle("/alert", alertsHandler)
 
-	if opts.AdminAuth != nil {
-		mux.Handle("/api/admin/login", adminhttp.NewLoginHandler(adminhttp.LoginHandlerOptions{
-			Manager: opts.AdminAuth,
-		}))
-		mux.Handle("/api/admin/submissions", adminhttp.NewSubmissionsHandler(adminhttp.SubmissionsHandlerOptions{
-			Manager:          opts.AdminAuth,
-			Logger:           logger,
-			YouTube:          opts.YouTube,
-			StreamersStore:   streamersStore,
-			SubmissionsStore: submissionsStore,
-		}))
-		mux.Handle("/api/admin/monitor/youtube", adminhttp.NewMonitorHandler(adminhttp.MonitorHandlerOptions{
-			Manager:        opts.AdminAuth,
-			Logger:         logger,
-			StreamersStore: streamersStore,
-			YouTube:        opts.YouTube,
-		}))
-	}
-
-	mux.HandleFunc("/api/server/config", func(w http.ResponseWriter, r *http.Request) {
-		respondJSON(w, opts.RuntimeInfo)
-	})
-
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -161,13 +62,6 @@ func NewRouter(opts Options) http.Handler {
 	})
 
 	return logging.WithHTTPLogging(mux, logger)
-}
-
-func respondJSON(w http.ResponseWriter, payload any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-	}
 }
 
 // handleAlerts returns an HTTP handler that only treats likely Google/YouTube

@@ -9,6 +9,7 @@ import (
 	adminauth "live-stream-alerts/internal/admin/auth"
 	adminservice "live-stream-alerts/internal/admin/service"
 	"live-stream-alerts/internal/logging"
+	"live-stream-alerts/internal/platforms/youtube/monitoring"
 	"live-stream-alerts/internal/streamers"
 )
 
@@ -23,7 +24,7 @@ type MonitorHandlerOptions struct {
 }
 
 type monitorService interface {
-	Overview(ctx context.Context) (adminservice.YouTubeMonitorOverview, error)
+	Overview(ctx context.Context) (monitoring.Overview, error)
 }
 
 type monitorHandler struct {
@@ -40,7 +41,7 @@ func NewMonitorHandler(opts MonitorHandlerOptions) http.Handler {
 	}
 	svc := opts.Service
 	if svc == nil {
-		svc = adminservice.NewMonitorService(adminservice.MonitorServiceOptions{
+		svc = monitoring.NewService(monitoring.ServiceOptions{
 			StreamersStore:      opts.StreamersStore,
 			DefaultLeaseSeconds: opts.YouTube.LeaseSeconds,
 		})

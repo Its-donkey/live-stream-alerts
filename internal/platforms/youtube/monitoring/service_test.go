@@ -1,4 +1,4 @@
-package service_test
+package monitoring_test
 
 import (
 	"context"
@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	adminservice "live-stream-alerts/internal/admin/service"
+	"live-stream-alerts/internal/platforms/youtube/monitoring"
 	"live-stream-alerts/internal/streamers"
 )
 
-func TestMonitorServiceOverview(t *testing.T) {
+func TestServiceOverview(t *testing.T) {
 	dir := t.TempDir()
 	store := streamers.NewStore(filepath.Join(dir, "streamers.json"))
 	now := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
@@ -20,7 +20,7 @@ func TestMonitorServiceOverview(t *testing.T) {
 	appendRecord(t, store, "expired", "UCexpired1234567890123", now.Add(-time.Hour), 600)
 	appendRecord(t, store, "pending", "UCpending1234567890123", time.Time{}, 600)
 
-	svc := adminservice.NewMonitorService(adminservice.MonitorServiceOptions{
+	svc := monitoring.NewService(monitoring.ServiceOptions{
 		StreamersStore:      store,
 		DefaultLeaseSeconds: 600,
 		RenewWindow:         0.05,
@@ -42,7 +42,7 @@ func TestMonitorServiceOverview(t *testing.T) {
 	}
 
 	healthy := findRecord(t, overview.Records, "healthy")
-	if healthy.Status != adminservice.LeaseStatusHealthy {
+	if healthy.Status != monitoring.LeaseStatusHealthy {
 		t.Fatalf("expected healthy status, got %s", healthy.Status)
 	}
 	if healthy.LeaseStart == nil || healthy.RenewAt == nil || healthy.LeaseExpires == nil {
@@ -50,7 +50,7 @@ func TestMonitorServiceOverview(t *testing.T) {
 	}
 
 	renewing := findRecord(t, overview.Records, "renewing")
-	if renewing.Status != adminservice.LeaseStatusRenewing {
+	if renewing.Status != monitoring.LeaseStatusRenewing {
 		t.Fatalf("expected renewing status, got %s", renewing.Status)
 	}
 	if renewing.LeaseSeconds != 600 {
@@ -58,12 +58,12 @@ func TestMonitorServiceOverview(t *testing.T) {
 	}
 
 	expired := findRecord(t, overview.Records, "expired")
-	if expired.Status != adminservice.LeaseStatusExpired {
+	if expired.Status != monitoring.LeaseStatusExpired {
 		t.Fatalf("expected expired status, got %s", expired.Status)
 	}
 
 	pending := findRecord(t, overview.Records, "pending")
-	if pending.Status != adminservice.LeaseStatusPending {
+	if pending.Status != monitoring.LeaseStatusPending {
 		t.Fatalf("expected pending status, got %s", pending.Status)
 	}
 	if len(pending.Issues) == 0 {
@@ -97,7 +97,7 @@ func appendRecord(t *testing.T, store *streamers.Store, alias, channelID string,
 	}
 }
 
-func findRecord(t *testing.T, records []adminservice.YouTubeLeaseRecord, alias string) adminservice.YouTubeLeaseRecord {
+func findRecord(t *testing.T, records []monitoring.LeaseEntry, alias string) monitoring.LeaseEntry {
 	t.Helper()
 	for _, record := range records {
 		if record.Alias == alias {
@@ -105,5 +105,5 @@ func findRecord(t *testing.T, records []adminservice.YouTubeLeaseRecord, alias s
 		}
 	}
 	t.Fatalf("record %s not found", alias)
-	return adminservice.YouTubeLeaseRecord{}
+	return monitoring.LeaseEntry{}
 }
