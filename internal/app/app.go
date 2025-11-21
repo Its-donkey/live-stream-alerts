@@ -6,18 +6,14 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"live-stream-alerts/config"
-	adminauth "live-stream-alerts/internal/admin/auth"
 	apiv1 "live-stream-alerts/internal/api/v1"
 	"live-stream-alerts/internal/httpserver"
 	"live-stream-alerts/internal/logging"
 	"live-stream-alerts/internal/platforms/youtube/subscriptions"
 	"live-stream-alerts/internal/streamers"
-	streamersvc "live-stream-alerts/internal/streamers/service"
-	"live-stream-alerts/internal/submissions"
 )
 
 const (
@@ -58,32 +54,12 @@ func Run(ctx context.Context, opts Options) error {
 	logger := logging.New()
 
 	streamerStore := streamers.NewStore(streamers.DefaultFilePath)
-	submissionStore := submissions.NewStore(submissions.DefaultFilePath)
-	streamerService := streamersvc.New(streamersvc.Options{
-		Streamers:     streamerStore,
-		Submissions:   submissionStore,
-		YouTubeClient: &http.Client{Timeout: 10 * time.Second},
-		YouTubeHubURL: strings.TrimSpace(appCfg.YouTube.HubURL),
-	})
-
-	adminAuth := buildAdminManager(appCfg.Admin)
 
 	router := apiv1.NewRouter(apiv1.Options{
-		Logger:           logger,
-		StreamersPath:    streamerStore.Path(),
-		StreamersStore:   streamerStore,
-		SubmissionsPath:  submissionStore.Path(),
-		SubmissionsStore: submissionStore,
-		StreamersService: streamerService,
-		AdminAuth:        adminAuth,
-		YouTube:          appCfg.YouTube,
-		RuntimeInfo: apiv1.RuntimeInfo{
-			Name:        "live-stream-alerts",
-			Addr:        appCfg.Server.Addr,
-			Port:        appCfg.Server.Port,
-			ReadTimeout: opts.ReadTimeout.String(),
-			DataPath:    streamers.DefaultFilePath,
-		},
+		Logger:         logger,
+		StreamersPath:  streamerStore.Path(),
+		StreamersStore: streamerStore,
+		YouTube:        appCfg.YouTube,
 	})
 
 	serverCfg := httpserver.Config{
@@ -148,16 +124,4 @@ func (o Options) withDefaults() Options {
 		o.ReadTimeout = defaultReadTimeout
 	}
 	return o
-}
-
-func buildAdminManager(cfg config.AdminConfig) *adminauth.Manager {
-	email := strings.TrimSpace(cfg.Email)
-	if email == "" || strings.TrimSpace(cfg.Password) == "" {
-		return nil
-	}
-	return adminauth.NewManager(adminauth.Config{
-		Email:    email,
-		Password: cfg.Password,
-		TokenTTL: time.Duration(cfg.TokenTTLSeconds) * time.Second,
-	})
 }

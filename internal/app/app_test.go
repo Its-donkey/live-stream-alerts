@@ -3,8 +3,6 @@ package app
 import (
 	"testing"
 	"time"
-
-	"live-stream-alerts/config"
 )
 
 func TestOptionsWithDefaults(t *testing.T) {
@@ -36,17 +34,5 @@ func TestOptionsWithDefaultsRespectOverrides(t *testing.T) {
 
 	if normalized != opts {
 		t.Fatalf("expected overrides to remain unchanged")
-	}
-}
-
-func TestBuildAdminManagerRequiresCredentials(t *testing.T) {
-	if mgr := buildAdminManager(config.AdminConfig{}); mgr != nil {
-		t.Fatalf("expected nil manager for missing credentials")
-	}
-
-	cfg := config.AdminConfig{Email: "admin@example.com", Password: "secret", TokenTTLSeconds: 60}
-	mgr := buildAdminManager(cfg)
-	if mgr == nil {
-		t.Fatalf("expected manager for populated credentials")
 	}
 }
