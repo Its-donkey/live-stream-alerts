@@ -138,6 +138,12 @@ func NewRouter(opts Options) http.Handler {
 			StreamersStore:   streamersStore,
 			SubmissionsStore: submissionsStore,
 		}))
+		mux.Handle("/api/admin/monitor/youtube", adminhttp.NewMonitorHandler(adminhttp.MonitorHandlerOptions{
+			Manager:        opts.AdminAuth,
+			Logger:         logger,
+			StreamersStore: streamersStore,
+			YouTube:        opts.YouTube,
+		}))
 	}
 
 	mux.HandleFunc("/api/server/config", func(w http.ResponseWriter, r *http.Request) {

@@ -91,6 +91,7 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
 | POST   | `/api/admin/login`          | Issues a bearer token for administrative API calls. |
 | GET    | `/api/admin/submissions`    | Lists pending streamer submissions for review. |
 | POST   | `/api/admin/submissions`    | Approves or rejects a pending submission. |
+| GET    | `/api/admin/monitor/youtube`| Summarises YouTube lease status for every stored channel. |
 | GET    | `/`                          | Returns placeholder text reminding you to host alGUI separately. |
 
 ### GET `/alerts`
@@ -261,6 +262,40 @@ All HTTP routes are registered in `internal/api/v1/router.go`. Update the table 
     ]
   }
   ```
+
+### GET `/api/admin/monitor/youtube`
+- **Purpose:** Exposes the YouTube lease monitor summary so the admin console can spot channels that are renewing or have expired leases.
+- **Authentication:** Requires `Authorization: Bearer <token>` header from `/api/admin/login`.
+- **Response:**
+  ```json
+  {
+    "summary": {
+      "total": 3,
+      "healthy": 2,
+      "renewing": 1,
+      "expired": 0,
+      "pending": 0
+    },
+    "records": [
+      {
+        "streamerId": "4b8e82c4a16e49e58c1ac2993e7f85e0",
+        "alias": "Attorney Melanie Little",
+        "channelId": "UCFSlI8Y3Zdoq5buNW_40AAA",
+        "handle": "@AttorneyMelanieLittle",
+        "hubUrl": "https://pubsubhubbub.appspot.com/subscribe",
+        "callbackUrl": "https://sharpen.live/dev/alerts",
+        "leaseSeconds": 864000,
+        "leaseStart": "2025-11-18T10:07:14Z",
+        "leaseExpires": "2025-11-28T10:07:14Z",
+        "renewAt": "2025-11-27T14:31:14Z",
+        "renewWindowSeconds": 43200,
+        "status": "healthy",
+        "issues": []
+      }
+    ]
+  }
+  ```
+- **Statuses:** `healthy` (outside the renewal window), `renewing` (inside the window but not yet expired), `expired` (lease window elapsed), and `pending` (missing data such as a lease start or lease length). Each record’s `issues` array calls out missing/invalid fields so operators know what needs to be corrected.
 
 ### POST `/api/admin/submissions`
 - **Purpose:** Approves or rejects a submission, removing it from the pending list.

@@ -29,6 +29,7 @@
 - Inspect POST `/alerts` WebSub notifications, parse the feed payload, and query YouTube to confirm whether the referenced video is a livestream that's currently online.
 - Rotated `data/alertserver.log` into timestamped archives under `data/logs/` on startup so each run writes to a clean file without losing history.
 - Added POST `/api/admin/login` plus an `admin` config block so the console can request bearer tokens tied to configured credentials, alongside GET/POST `/api/admin/submissions` for listing and approving/rejecting pending streamer submissions.
+- Added GET `/api/admin/monitor/youtube` and the backing monitor service so the admin console can inspect lease health for every stored YouTube channel.
 - Updated POST `/api/streamers` to queue submissions in `data/submissions.json` until an admin approves them, keeping `data/streamers.json` limited to vetted entries.
 - Added a background YouTube lease monitor that renews subscriptions once ~95% of the current `leaseSeconds` window has elapsed so WebSub callbacks keep flowing without manual intervention.
 ### Changed
